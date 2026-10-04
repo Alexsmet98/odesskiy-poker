@@ -8,7 +8,7 @@ import {
   scoreHandForPlayer,
   settle,
 } from "../scoring";
-import type { HandResult, PremiumResult } from "../types";
+import type { HandResult, PlayerId, PremiumResult } from "../types";
 
 describe("очки за раздачу", () => {
   it("даёт 10 за взятку при точном заказе", () => {
@@ -95,7 +95,7 @@ describe("зачёт наборов и сливов", () => {
       handIndex: 28 + i,
       kind: "nabory" as const,
       cards: 9,
-      dealer: 0,
+      dealer: 0 as PlayerId,
       bids: [null, null, null, null],
       tricks: [[2, 0, 1, 3][i], [5, 0, 6, 0][i], [0, 2, 1, 5][i], [2, 6, 1, 2][i]],
       points: [0, 0, 0, 0],
@@ -104,7 +104,7 @@ describe("зачёт наборов и сливов", () => {
       handIndex: 32 + i,
       kind: "slivy" as const,
       cards: 9,
-      dealer: 0,
+      dealer: 0 as PlayerId,
       bids: [null, null, null, null],
       tricks: [[5, 3, 1, 1][i], [2, 2, 2, 5][i], [2, 3, 3, 2][i], [0, 0, 4, 1][i]],
       points: [0, 0, 0, 0],

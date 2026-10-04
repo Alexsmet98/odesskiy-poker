@@ -76,7 +76,7 @@ describe("партия целиком", () => {
     const game = playToEnd(createGame({ seed: 777, dealer: 3 }));
     for (const result of game.results) {
       if (result.kind !== "normal" && result.kind !== "dark") continue;
-      const total = result.bids.reduce((sum, b) => sum + (b ?? 0), 0);
+      const total = result.bids.reduce<number>((sum, b) => sum + (b ?? 0), 0);
       expect(total).not.toBe(result.cards);
     }
   });

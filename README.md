@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Одесский покер
 
-## Getting Started
+Играбельная веб-версия одесского покера на четверых: один живой игрок против трёх ботов.
+Атмосфера — подвальный бар у порта: тусклая лампа над столом, дым, зелёное сукно.
 
-First, run the development server:
+Правила реализованы по спецификации заказчика: торговля с правилом «не сходимся»,
+ход в масть, оба джокера со всеми режимами, тёмные, наборы, сливы и полное расписание
+партии из 43 строк протокола.
+
+## Что внутри
+
+- `src/lib/game/` — движок правил на чистом TypeScript, без зависимости от UI:
+  - `cards.ts` — колода 36 карт + 2 джокера, старшинство, сортировка руки;
+  - `schedule.ts` — расписание партии: 36 игровых раздач и 7 строк премии;
+  - `rules.ts` — легальность заказов, требование масти, разбор взятки со всеми режимами джокера;
+  - `scoring.ts` — очки за раздачу, премия, зачёт наборов и сливов, таблица протокола;
+  - `engine.ts` — состояние партии и переходы (`applyAction`);
+  - `ai.ts` — боты: выбирают ход только из разрешённых правилами.
+- `src/components/game/` — стол, руки, джокер-диалог, протокол, лог за столом.
+- `src/lib/game/__tests__/` — юнит-тесты Vitest: торговля, взятки, все режимы джокера, подсчёт очков.
+
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev -- --port 43711
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Откройте http://127.0.0.1:43711.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Тесты и проверки
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test          # Vitest, движок правил
+npx tsc --noEmit  # типы
+npx eslint .      # линт
+npm run build     # production-сборка
+```
 
-## Learn More
+## Правила кратко
 
-To learn more about Next.js, take a look at the following resources:
+- 4 игрока, колода 38 карт (36 + 2 джокера), сдача по кругу.
+- Торговля: первым торгуется игрок слева от сдающего, сдающий — последним и не может
+  замкнуть сумму заказов на числе карт на руках («не сходимся»).
+- Взятку забирает старшая карта масти хода. Джокер игнорирует масть: в ответ его кладут
+  наисильнейшим козырем либо самой младшей картой; заходя с него, объявляют масть и режим
+  («старший», «младший», «по самым большим <масть>», «слив взятки»).
+- Очки: точный заказ — 10 за взятку, выполненный пас — 5, перебор — 1 за взятку,
+  недобор — −10 за каждую недобранную взятку.
+- Премия («Пр») — тому, кто в каждой раздаче блока взял ровно свой заказ: очки за раздачу
+  с самым большим заказом блока, удвоенные целиком (заказ 4 → +80, блок из пасов → +10).
+- Наборы и сливы очки сразу не дают: в конце партии ОН − ОС = Сум НС, Очки НС = Сум НС × 20,
+  Итого = очки за раздачи и премии + Очки НС.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Полная спецификация правил лежит в контексте проекта (`docs/game-rules.md`).
