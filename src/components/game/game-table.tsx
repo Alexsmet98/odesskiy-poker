@@ -50,8 +50,10 @@ export function GameTable() {
     setPendingJoker(null);
   };
 
-  const trick = state.currentTrick ?? state.lastTrick;
-  const showingLastTrick = state.currentTrick === null && state.lastTrick !== null;
+  // Смотреть разрешено только последнюю взятку — её и показываем, пока новая пуста.
+  const showingLastTrick =
+    state.lastTrick !== null && (state.currentTrick?.plays.length ?? 0) === 0;
+  const trick = showingLastTrick ? state.lastTrick : state.currentTrick;
 
   const centerTitle = (() => {
     if (state.phase === "game-over") return "Партия окончена";
