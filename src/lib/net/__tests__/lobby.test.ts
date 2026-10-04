@@ -356,3 +356,51 @@ describe("лобби: партия", () => {
     expect(after.rowIndex).toBe(done.rowIndex + 1);
   });
 });
+
+describe("лобби: long-poll вместо SSE", () => {
+  it("сразу отвечает при устаревшей версии и ждёт изменения при актуальной", async () => {
+    const { manager } = setup();
+    const host = manager.create("Аня");
+
+    const first = await manager.poll(host.code, host.token, -1);
+    expect(first).not.toBeNull();
+    expect(first?.event.lobby.seats[0].connected).toBe(true);
+
+    let resolved = false;
+    const waiting = manager
+      .poll(host.code, host.token, first!.version)
+      .then((reply) => {
+        resolved = true;
+        return reply;
+      });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    manager.join(host.code, "Борис");
+    const next = await waiting;
+    expect(next?.version).toBeGreaterThan(first!.version);
+    expect(next?.event.lobby.seats[1]).toMatchObject({ name: "Борис" });
+  });
+
+  it("когда опросы прекращаются, аренда истекает и игрок отмечается как ушедший", async () => {
+    const { manager, scheduler } = setup();
+    const host = manager.create("Аня");
+    const first = await manager.poll(host.code, host.token, -1);
+
+    const waiting = manager.poll(host.code, host.token, first!.version);
+    scheduler.runNext();
+    const reply = await waiting;
+    expect(reply?.event.lobby.seats[0].connected).toBe(false);
+    expect(
+      manager.viewFor(host.code, host.token).lobby.seats[0].connected,
+    ).toBe(false);
+  });
+
+  it("поллинг считается присутствием: боты ходят, пока человек опрашивает лобби", async () => {
+    const { manager, scheduler } = setup();
+    const host = manager.create("Аня");
+    manager.start(host.code, host.token);
+    await manager.poll(host.code, host.token, -1);
+    expect(scheduler.pending).toBeGreaterThan(0);
+  });
+});

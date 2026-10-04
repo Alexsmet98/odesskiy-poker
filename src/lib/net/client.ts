@@ -61,6 +61,8 @@ export const lobbyApi = {
       method: "POST",
       token,
     }),
+  pollUrl: (code: string, token: string, version: number) =>
+    `${lobbyPath(code)}/poll?token=${encodeURIComponent(token)}&v=${version}`,
   eventsUrl: (code: string, token: string) =>
     `${lobbyPath(code)}/events?token=${encodeURIComponent(token)}`,
 };

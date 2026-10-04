@@ -27,6 +27,9 @@ import {
 import { maskStateFor } from "./view";
 
 export const TRICK_PAUSE_MS = 1500;
+export const POLL_WAIT_MS = 20_000;
+/** Сколько игрок считается «на месте» после последнего запроса long-poll. */
+export const POLL_LEASE_MS = 10_000;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const MAX_LOBBIES = 200;
 const IDLE_LOBBY_MS = 6 * 60 * 60 * 1000;
@@ -63,6 +66,8 @@ type Lobby = {
   hostSeat: PlayerId;
   seats: SeatData[];
   listeners: Map<PlayerId, Set<Listener>>;
+  leases: Map<PlayerId, { listener: Listener; timer: unknown }>;
+  version: number;
   game: GameState | null;
   timer: unknown;
   touchedAt: number;
@@ -124,6 +129,8 @@ export class LobbyManager {
         { kind: "empty" },
       ],
       listeners: new Map(),
+      leases: new Map(),
+      version: 0,
       game: null,
       timer: null,
       touchedAt: this.now(),
@@ -302,10 +309,78 @@ export class LobbyManager {
     };
   }
 
+  /**
+   * Запасной канал, когда SSE не доходит (прокси и туннели буферизуют поток):
+   * long-poll. Отвечает сразу, если у клиента устаревшая версия, иначе ждёт
+   * следующего изменения до `waitMs` и тогда отвечает `null`.
+   */
+  poll(
+    rawCode: string,
+    token: string,
+    since: number,
+    waitMs: number = POLL_WAIT_MS,
+  ): Promise<{ version: number; event: ServerEvent } | null> {
+    const lobby = this.requireLobby(rawCode);
+    const seat = this.requireSeat(lobby, token);
+    this.hold(lobby, seat);
+    if (lobby.version !== since) {
+      return Promise.resolve({
+        version: lobby.version,
+        event: this.eventFor(lobby, seat),
+      });
+    }
+
+    return new Promise((resolve) => {
+      const set = lobby.listeners.get(seat) ?? new Set<Listener>();
+      lobby.listeners.set(seat, set);
+      const finish = (changed: boolean) => {
+        this.scheduler.clear(timer);
+        set.delete(listener);
+        resolve(
+          changed
+            ? { version: lobby.version, event: this.eventFor(lobby, seat) }
+            : null,
+        );
+      };
+      const listener: Listener = () => finish(true);
+      const timer = this.scheduler.set(() => finish(false), waitMs);
+      set.add(listener);
+    });
+  }
+
   /** Состояние для тестов и отладки: что видит конкретный игрок. */
   viewFor(rawCode: string, token: string): ServerEvent {
     const lobby = this.requireLobby(rawCode);
     return this.eventFor(lobby, this.requireSeat(lobby, token));
+  }
+
+  /** Пока клиент опрашивает лобби, он «на месте»: между запросами держим аренду. */
+  private hold(lobby: Lobby, seat: PlayerId): void {
+    let lease = lobby.leases.get(seat);
+    const created = !lease;
+    if (lease) {
+      this.scheduler.clear(lease.timer);
+    } else {
+      lease = { listener: () => {}, timer: null };
+      lobby.leases.set(seat, lease);
+      const set = lobby.listeners.get(seat) ?? new Set<Listener>();
+      set.add(lease.listener);
+      lobby.listeners.set(seat, set);
+    }
+    const held = lease;
+    held.timer = this.scheduler.set(() => {
+      const current = this.lobbies.get(lobby.code);
+      if (!current || current.leases.get(seat) !== held) return;
+      current.leases.delete(seat);
+      current.listeners.get(seat)?.delete(held.listener);
+      this.touch(current);
+      this.broadcast(current);
+      this.schedule(current);
+    }, POLL_LEASE_MS);
+    if (created) {
+      this.broadcast(lobby);
+      this.schedule(lobby);
+    }
   }
 
   private requireLobby(rawCode: string): Lobby {
@@ -349,11 +424,17 @@ export class LobbyManager {
     if (lobby.timer !== null) this.scheduler.clear(lobby.timer);
     lobby.timer = null;
     for (const set of lobby.listeners.values()) set.clear();
+    for (const lease of lobby.leases.values())
+      this.scheduler.clear(lease.timer);
+    lobby.leases.clear();
     this.lobbies.delete(lobby.code);
   }
 
   private closeListeners(lobby: Lobby, seat: PlayerId): void {
     lobby.listeners.get(seat)?.clear();
+    const lease = lobby.leases.get(seat);
+    if (lease) this.scheduler.clear(lease.timer);
+    lobby.leases.delete(seat);
   }
 
   private snapshotFor(lobby: Lobby, mySeat: PlayerId): LobbySnapshot {
@@ -384,6 +465,7 @@ export class LobbyManager {
   }
 
   private broadcast(lobby: Lobby): void {
+    lobby.version += 1;
     for (const [seat, listeners] of lobby.listeners) {
       if (listeners.size === 0) continue;
       const event = this.eventFor(lobby, seat);
