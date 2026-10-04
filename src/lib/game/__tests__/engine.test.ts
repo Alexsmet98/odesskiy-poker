@@ -4,6 +4,7 @@ import { isJoker } from "../cards";
 import { applyAction, createGame, currentHandRow, legalBidsFor, settlement } from "../engine";
 import { isLegalBid, isLegalPlay, legalPlays } from "../rules";
 import { biddingOrder } from "../rules";
+import { buildScoreboard } from "../scoring";
 import { SCHEDULE, TOTAL_HANDS } from "../schedule";
 import { PLAYER_IDS, type GameState, type PlayerId } from "../types";
 import { playToEnd, stepAutomatically } from "./autoplay";
@@ -181,5 +182,39 @@ describe("последняя взятка", () => {
     }
     expect(seen).toBeGreaterThan(0);
     expect(game.lastTrick?.plays).toHaveLength(4);
+  });
+});
+
+describe("джокеры в протоколе", () => {
+  it("записывает, сколько джокеров было у каждого игрока на руках в раздаче", () => {
+    let game = createGame({ seed: 77, dealer: 0 });
+    const dealt = PLAYER_IDS.map((p) => game.hands[p].filter(isJoker).length);
+    expect(game.dealtJokers).toEqual(dealt);
+
+    let guard = 0;
+    while (game.phase !== "hand-complete" && guard < 500) {
+      guard += 1;
+      game = stepAutomatically(game);
+    }
+    expect(game.results[0].jokers).toEqual(dealt);
+  });
+
+  it("за партию у игрока бывает 0, 1 или 2 джокера, а в раздаче всего не больше двух", () => {
+    const finished = playToEnd(createGame({ seed: 20260824, dealer: 0 }));
+    expect(finished.results).toHaveLength(TOTAL_HANDS);
+    for (const result of finished.results) {
+      for (const count of result.jokers) expect([0, 1, 2]).toContain(count);
+      expect(result.jokers.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2);
+    }
+    expect(finished.results.some((r) => r.jokers.some((n) => n > 0))).toBe(true);
+  });
+
+  it("попадает в строки протокола", () => {
+    const finished = playToEnd(createGame({ seed: 20260824, dealer: 0 }));
+    const rows = buildScoreboard(finished.results, finished.premiums);
+    for (const row of rows.filter((r) => r.type === "hand")) {
+      const result = finished.results.find((r) => r.handIndex === row.handIndex)!;
+      expect(row.cells.map((cell) => cell.jokers)).toEqual(result.jokers);
+    }
   });
 });

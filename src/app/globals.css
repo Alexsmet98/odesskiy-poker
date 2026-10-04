@@ -197,6 +197,26 @@
     border-radius: 4px;
   }
 
+  .joker-mark-circle,
+  .joker-mark-box {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 0 0.3em;
+    line-height: 1.35;
+    color: oklch(0.32 0.14 265);
+    border: 1.5px solid oklch(0.38 0.15 265);
+  }
+
+  .joker-mark-circle {
+    border-radius: 54% 46% 52% 48% / 48% 55% 45% 52%;
+    transform: rotate(-3deg);
+  }
+
+  .joker-mark-box {
+    border-radius: 2px;
+    transform: rotate(1.5deg);
+  }
+
   .joker-red {
     color: oklch(0.72 0.2 25);
     background: linear-gradient(165deg, oklch(0.3 0.09 25), oklch(0.17 0.05 25));

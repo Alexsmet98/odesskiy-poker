@@ -5,6 +5,25 @@ import { cn } from "@/lib/utils";
 import { buildScoreboard, type Settlement } from "@/lib/game/scoring";
 import { PLAYER_IDS, type GameState } from "@/lib/game/types";
 
+function jokerTitle(jokers: number): string | undefined {
+  if (jokers === 1) return "На руках был 1 джокер";
+  if (jokers === 2) return "На руках было 2 джокера";
+  return undefined;
+}
+
+/** Пометка джокеров как на бумаге: 1 джокер — кружок, 2 джокера — прямоугольник. */
+function JokerMark({ jokers, children }: { jokers: number; children: React.ReactNode }) {
+  if (jokers <= 0) return <>{children}</>;
+  return (
+    <span
+      title={jokerTitle(jokers)}
+      className={jokers === 1 ? "joker-mark-circle" : "joker-mark-box"}
+    >
+      {children}
+    </span>
+  );
+}
+
 function cellText(value: number | null): string {
   if (value === null) return "";
   return String(value);
@@ -80,22 +99,15 @@ export function Scoreboard({
                             <span className="text-black/30">~</span>
                           )
                         ) : (
-                          <span
-                            className={cn(
-                              cell.exact && !isNs && "rounded-full bg-blue-900/10 px-1",
-                            )}
-                          >
+                          <JokerMark jokers={isNs ? cell.jokers : 0}>
                             {left === 0 && !isNs && row.played ? "—" : cellText(left)}
-                          </span>
+                          </JokerMark>
                         )}
                       </td>
-                      <td
-                        className={cn(
-                          "border border-black/25 px-1 py-1 text-center",
-                          cell.exact && !isPremium && !isNs && "font-semibold",
-                        )}
-                      >
-                        {cellText(cell.runningTotal)}
+                      <td className="border border-black/25 px-1 py-1 text-center">
+                        <JokerMark jokers={isNs || isPremium ? 0 : cell.jokers}>
+                          {cellText(cell.runningTotal)}
+                        </JokerMark>
                       </td>
                     </Fragment>
                   );
@@ -111,6 +123,15 @@ export function Scoreboard({
           <SummaryRow label="Итого" values={settlement.total} strong signed />
         </tbody>
       </table>
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-black/20 bg-black/[0.04] px-3 py-2 text-[11px] text-black/70">
+        <span>Джокеры на руках в раздаче:</span>
+        <span className="flex items-center gap-1.5">
+          <span className="joker-mark-circle">12</span> один
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="joker-mark-box">12</span> два
+        </span>
+      </p>
     </div>
   );
 }

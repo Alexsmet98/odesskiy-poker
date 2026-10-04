@@ -92,6 +92,7 @@ function deal(state: GameState, cards: number): void {
   state.rngCursor += 1;
   const deck = shuffle(createDeck(), rng);
   state.hands = PLAYER_IDS.map((p) => sortHand(deck.slice(p * cards, p * cards + cards)));
+  state.dealtJokers = state.hands.map((hand) => hand.filter(isJoker).length);
 }
 
 function startRow(state: GameState): void {
@@ -124,6 +125,7 @@ function startRow(state: GameState): void {
   if (isBlindBidding(row.kind)) {
     // Тёмные: торговля идёт до сдачи карт.
     state.hands = PLAYER_IDS.map(() => []);
+    state.dealtJokers = PLAYER_IDS.map(() => 0);
     state.phase = "bidding";
     state.bidTurn = firstAfterDealer(state.dealer);
     state.turn = null;
@@ -185,6 +187,7 @@ export function createGame(options: CreateGameOptions = {}): GameState {
     bidTurn: null,
     turn: null,
     tricksWon: PLAYER_IDS.map(() => 0),
+    dealtJokers: PLAYER_IDS.map(() => 0),
     currentTrick: null,
     lastTrick: null,
     trickNumber: 1,
@@ -258,6 +261,7 @@ function finishHand(state: GameState): void {
     dealer: state.dealer,
     bids: [...state.bids],
     tricks: [...state.tricksWon],
+    jokers: [...state.dealtJokers],
     points: PLAYER_IDS.map((p) => scoreHandForPlayer(row.kind, state.bids[p], state.tricksWon[p])),
   };
   state.results = [...state.results.filter((r) => r.handIndex !== row.handIndex), result];

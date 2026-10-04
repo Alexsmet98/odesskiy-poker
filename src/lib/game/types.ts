@@ -64,6 +64,8 @@ export type HandResult = {
   dealer: PlayerId;
   bids: (number | null)[];
   tricks: number[];
+  /** Сколько джокеров было на руках у каждого игрока в этой раздаче (0–2). */
+  jokers: number[];
   /** Очки за раздачу; у наборов и сливов 0 — они идут в зачёт НС. */
   points: number[];
 };
@@ -106,6 +108,8 @@ export type GameState = {
   bidTurn: PlayerId | null;
   turn: PlayerId | null;
   tricksWon: number[];
+  /** Джокеры в сданных руках текущей раздачи. */
+  dealtJokers: number[];
   currentTrick: Trick | null;
   /** Последняя доигранная взятка — единственная, которую разрешено смотреть. */
   lastTrick: Trick | null;

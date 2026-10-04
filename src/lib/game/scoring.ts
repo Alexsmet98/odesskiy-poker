@@ -120,6 +120,8 @@ export type ScoreboardCell = {
   runningTotal: number | null;
   /** Заказ выполнен точно — в протоколе такие числа обводят. */
   exact: boolean;
+  /** Джокеров на руках в этой раздаче: 1 — обводят кружком, 2 — прямоугольником. */
+  jokers: number;
 };
 
 export type ScoreboardRow = {
@@ -138,6 +140,7 @@ const EMPTY_CELL: ScoreboardCell = {
   points: null,
   runningTotal: null,
   exact: false,
+  jokers: 0,
 };
 
 /** Строки протокола в том же виде, что на бумаге: заказ и накопительный счёт по каждому игроку. */
@@ -172,6 +175,7 @@ export function buildScoreboard(
           points: result.points[p],
           runningTotal: isNs ? null : running[p],
           exact: result.bids[p] !== null && result.bids[p] === result.tricks[p],
+          jokers: result.jokers[p] ?? 0,
         };
       });
       rows.push({
@@ -205,6 +209,7 @@ export function buildScoreboard(
           points: premium.points[p],
           runningTotal: premium.points[p] > 0 ? running[p] : null,
           exact: premium.points[p] > 0,
+          jokers: 0,
         };
       });
       rows.push({
