@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { isJoker, type Card } from "@/lib/game/cards";
-import { trickContext } from "@/lib/game/rules";
 import { SCHEDULE } from "@/lib/game/schedule";
 import type { JokerDeclaration, PlayerId } from "@/lib/game/types";
 import { ActionPanel } from "./action-panel";
@@ -260,11 +259,6 @@ export function GameTableView({
       <JokerDialog
         open={pendingJoker !== null}
         isLead={isLead}
-        lowJokerWins={
-          state.currentTrick !== null &&
-          state.currentTrick.plays.length > 0 &&
-          trickContext(state.currentTrick)?.dumpTarget === "lowest"
-        }
         onCancel={() => setPendingJoker(null)}
         onConfirm={onJokerConfirm}
       />

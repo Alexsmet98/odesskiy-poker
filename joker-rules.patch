@@ -1,0 +1,674 @@
+diff --git a/README.md b/README.md
+index e417486..be36f74 100644
+--- a/README.md
++++ b/README.md
+@@ -54,11 +54,14 @@ npm run build     # production-сборка
+ - Торговля: первым торгуется игрок слева от сдающего, сдающий — последним и не может
+   замкнуть сумму заказов на числе карт на руках («не сходимся»).
+ - Взятку забирает старшая карта масти хода. Джокер игнорирует масть: в ответ его кладут
+-  наисильнейшим козырем либо самой младшей картой; заходя с него, объявляют масть и режим
+-  («старший», «младший», «по самым большим <масть>», «слив взятки»).
++  наисильнейшим козырем либо самой младшей картой. Заход джокером — четыре режима: «старший»
++  и «младший» (взятка ваша, даже против туза и шестёрки; красный заход бьёт чёрный джокер
++  «старшим козырем», заход чёрным красный не перебивает) и два слива.
+ - Слив «заберёт старшая» / «заберёт младшая»: остальные обязаны выложить именно старшую / младшую
+-  карту названной масти из своей руки (нет масти — любую, джокера можно всегда). Джокер, положенный
+-  «самой младшей картой» в сливе «заберёт младшая», забирает взятку (красный младше чёрного).
++  карту названной масти из своей руки (нет масти — любую, джокера можно всегда). На сливе
++  «заберёт старшая» и «заберёт младшая» джокер любого цвета, объявленный старшим козырем,
++  забирает взятку. Без такого джокера на «заберёт младшая» побеждает самая младшая карта масти:
++  шестёрка бьёт короля. Джокер, положенный «самой младшей картой», взятку не берёт.
+ - Очки: точный заказ — 10 за взятку, выполненный пас — 5, перебор — 1 за каждую взятку, которую взял игрок (заказал 2, взял 4 — +4),
+   недобор — −10 за каждую недобранную взятку.
+ - Премия («Пр») — тому, кто в каждой раздаче блока взял ровно свой заказ: очки за раздачу
+@@ -85,6 +88,7 @@ npm run build     # production-сборка
+ 
+   Откройте выданный https-адрес сами и создавайте лобби оттуда — ссылка для друзей будет публичной.
+   Адрес живёт, пока работает туннель.
++
+ - **Постоянно.** Подойдёт любой хостинг, где запускается обычный Node-процесс (Render, Railway,
+   Fly.io, VPS): в репозитории есть `Dockerfile`, порт 3000. Нужен **один постоянно работающий процесс**;
+   serverless-платформы (например, Vercel) не подходят — состояние лобби хранится в памяти процесса.
+diff --git a/src/app/api/lobbies/[code]/action/route.ts b/src/app/api/lobbies/[code]/action/route.ts
+index e4b6527..72f8d6b 100644
+--- a/src/app/api/lobbies/[code]/action/route.ts
++++ b/src/app/api/lobbies/[code]/action/route.ts
+@@ -24,11 +24,7 @@ function parseDeclaration(raw: unknown): JokerDeclaration | null {
+   if (d.kind === "lead") {
+     const suit = SUITS.find((s) => s === d.suit);
+     if (!suit) throw bad();
+-    if (
+-      d.mode === "lead-high" ||
+-      d.mode === "lead-low" ||
+-      d.mode === "demand-highest"
+-    ) {
++    if (d.mode === "lead-high" || d.mode === "lead-low") {
+       return { kind: "lead", mode: d.mode, suit };
+     }
+     if (
+diff --git a/src/components/game/action-panel.tsx b/src/components/game/action-panel.tsx
+index 31c7d6a..71e760f 100644
+--- a/src/components/game/action-panel.tsx
++++ b/src/components/game/action-panel.tsx
+@@ -21,9 +21,7 @@ function requirementHint(game: GameController): string | null {
+   const requirement = playRequirement(trick);
+   if (!ctx) return null;
+   if (requirement.kind === "highest-of") {
+-    return ctx.mode === "dump"
+-      ? `Слив: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`
+-      : `Требование: по самым большим ${SUIT_LABEL_ACCUSATIVE[requirement.suit]}. Джокера можно положить всегда.`;
++    return `Слив: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`;
+   }
+   if (requirement.kind === "lowest-of") {
+     return `Слив: нужно положить самую младшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`;
+diff --git a/src/components/game/joker-dialog.tsx b/src/components/game/joker-dialog.tsx
+index 4764660..b3c7e43 100644
+--- a/src/components/game/joker-dialog.tsx
++++ b/src/components/game/joker-dialog.tsx
+@@ -13,55 +13,45 @@ import { cn } from "@/lib/utils";
+ import {
+   SUIT_IS_RED,
+   SUIT_LABEL,
+-  SUIT_LABEL_ACCUSATIVE,
+   SUIT_SYMBOL,
+   SUITS,
+   type Suit,
+ } from "@/lib/game/cards";
+ import type { JokerDeclaration } from "@/lib/game/types";
+ 
+-type LeadMode =
+-  "lead-high" | "lead-low" | "demand-highest" | "dump-highest" | "dump-lowest";
++type LeadMode = "lead-high" | "lead-low" | "dump-highest" | "dump-lowest";
+ 
+ const LEAD_MODES: { mode: LeadMode; title: string; hint: string }[] = [
+   {
+     mode: "lead-high",
+     title: "Джокер старший",
+-    hint: "Задаёте масть, остальные ходят в неё, взятка ваша.",
++    hint: "Задаёте масть, остальные ходят в неё. Взятка ваша, даже против туза.",
+   },
+   {
+     mode: "lead-low",
+     title: "Джокер младший",
+-    hint: "Джокер — младшая карта. Если масти ни у кого нет, взятка всё равно ваша.",
+-  },
+-  {
+-    mode: "demand-highest",
+-    title: "По самым большим",
+-    hint: "Все обязаны скинуть самую большую карту названной масти.",
++    hint: "Задаёте масть, остальные ходят в неё. Взятка ваша, даже против шестёрки.",
+   },
+   {
+     mode: "dump-highest",
+     title: "Слив: заберёт старшая",
+-    hint: "Взятку забирает старшая карта названной масти.",
++    hint: "Взятку забирает старшая карта названной масти. Джокер «старшим козырем» забирает её любого цвета.",
+   },
+   {
+     mode: "dump-lowest",
+     title: "Слив: заберёт младшая",
+-    hint: "Взятку забирает младшая карта названной масти.",
++    hint: "Взятку забирает младшая карта названной масти. Джокер «старшим козырем» забирает её любого цвета.",
+   },
+ ];
+ 
+ export function JokerDialog({
+   open,
+   isLead,
+-  lowJokerWins = false,
+   onCancel,
+   onConfirm,
+ }: {
+   open: boolean;
+   isLead: boolean;
+-  /** Слив «заберёт младшая»: джокер младшей картой забирает взятку. */
+-  lowJokerWins?: boolean;
+   onCancel: () => void;
+   onConfirm: (declaration: JokerDeclaration) => void;
+ }) {
+@@ -146,17 +136,15 @@ export function JokerDialog({
+             </div>
+ 
+             <p className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-xs text-muted-foreground">
+-              {mode === "demand-highest"
+-                ? `Объявляю: по самым большим ${SUIT_LABEL_ACCUSATIVE[suit]}.`
+-                : `Объявляю: ${SUIT_LABEL[suit]}, ${
+-                    mode === "lead-high"
+-                      ? "джокер старший"
+-                      : mode === "lead-low"
+-                        ? "джокер младший"
+-                        : mode === "dump-highest"
+-                          ? "взятку заберёт старшая"
+-                          : "взятку заберёт младшая"
+-                  }.`}
++              {`Объявляю: ${SUIT_LABEL[suit]}, ${
++                mode === "lead-high"
++                  ? "джокер старший"
++                  : mode === "lead-low"
++                    ? "джокер младший"
++                    : mode === "dump-highest"
++                      ? "взятку заберёт старшая"
++                      : "взятку заберёт младшая"
++              }.`}
+             </p>
+ 
+             <div className="flex justify-end gap-2">
+@@ -189,9 +177,7 @@ export function JokerDialog({
+                 Самая младшая карта
+               </span>
+               <span className="block text-xs text-muted-foreground">
+-                {lowJokerWins
+-                  ? "Слив «заберёт младшая»: младший джокер — самая младшая карта, взятка будет ваша."
+-                  : "Слабее шестёрки любой масти — взятку не беру."}
++                Слабее шестёрки любой масти — взятку не беру.
+               </span>
+             </button>
+             <div className="flex justify-end">
+diff --git a/src/components/game/table-center.tsx b/src/components/game/table-center.tsx
+index 482842c..9d6aeb6 100644
+--- a/src/components/game/table-center.tsx
++++ b/src/components/game/table-center.tsx
+@@ -2,11 +2,7 @@
+ 
+ import { cn } from "@/lib/utils";
+ import { PlayingCard } from "./playing-card";
+-import {
+-  SUIT_LABEL,
+-  SUIT_LABEL_ACCUSATIVE,
+-  SUIT_SYMBOL,
+-} from "@/lib/game/cards";
++import { SUIT_LABEL, SUIT_SYMBOL } from "@/lib/game/cards";
+ import { trickContext } from "@/lib/game/rules";
+ import type { GameState, JokerDeclaration, Trick } from "@/lib/game/types";
+ 
+@@ -19,8 +15,6 @@ function declarationBadge(declaration: JokerDeclaration): string {
+       return `${SUIT_SYMBOL[declaration.suit]} джокер старший`;
+     case "lead-low":
+       return `${SUIT_SYMBOL[declaration.suit]} джокер младший`;
+-    case "demand-highest":
+-      return `по самым большим ${SUIT_LABEL_ACCUSATIVE[declaration.suit]}`;
+     case "dump":
+       return declaration.target === "highest"
+         ? `слив: старшая ${SUIT_SYMBOL[declaration.suit]}`
+diff --git a/src/components/game/table-view.tsx b/src/components/game/table-view.tsx
+index 66a4408..0509c4a 100644
+--- a/src/components/game/table-view.tsx
++++ b/src/components/game/table-view.tsx
+@@ -11,7 +11,6 @@ import {
+ } from "@/components/ui/dialog";
+ import { cn } from "@/lib/utils";
+ import { isJoker, type Card } from "@/lib/game/cards";
+-import { trickContext } from "@/lib/game/rules";
+ import { SCHEDULE } from "@/lib/game/schedule";
+ import type { JokerDeclaration, PlayerId } from "@/lib/game/types";
+ import { ActionPanel } from "./action-panel";
+@@ -260,11 +259,6 @@ export function GameTableView({
+       <JokerDialog
+         open={pendingJoker !== null}
+         isLead={isLead}
+-        lowJokerWins={
+-          state.currentTrick !== null &&
+-          state.currentTrick.plays.length > 0 &&
+-          trickContext(state.currentTrick)?.dumpTarget === "lowest"
+-        }
+         onCancel={() => setPendingJoker(null)}
+         onConfirm={onJokerConfirm}
+       />
+diff --git a/src/lib/game/__tests__/tricks.test.ts b/src/lib/game/__tests__/tricks.test.ts
+index 66f66ef..e1f3b44 100644
+--- a/src/lib/game/__tests__/tricks.test.ts
++++ b/src/lib/game/__tests__/tricks.test.ts
+@@ -128,17 +128,7 @@ describe("джокер в ответ на чужой ход", () => {
+   });
+ 
+   it.each([
+-    ["младшим", { kind: "lead", mode: "lead-low", suit: "clubs" } as const, 3],
+-    [
+-      "сливом",
+-      { kind: "lead", mode: "dump", suit: "clubs", target: "highest" } as const,
+-      3,
+-    ],
+-    [
+-      "по самым большим",
+-      { kind: "lead", mode: "demand-highest", suit: "clubs" } as const,
+-      3,
+-    ],
++    ["младшим", { kind: "lead", mode: "lead-low", suit: "clubs" } as const, 1],
+   ])(
+     "красный джокер, объявленный старшим в ответ, не бьёт заход чёрного %s",
+     (_name, declaration, winner) => {
+@@ -205,103 +195,46 @@ describe("заход джокером: старший", () => {
+ });
+ 
+ describe("заход джокером: младший", () => {
+-  it("отдаёт взятку старшей карте заявленной масти", () => {
+-    const current = trick(1, [
+-      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "clubs" }),
+-      play(2, c("clubs", 8)),
+-      play(3, c("clubs", 13)),
+-      play(0, c("clubs", 6)),
+-    ]);
+-    expect(resolveTrick(current)).toBe(3);
+-  });
+-
+-  it("оставляет взятку заходившему, если заявленной масти ни у кого нет", () => {
++  it("забирает взятку даже против шестёрки названной масти", () => {
+     const current = trick(1, [
+       play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "clubs" }),
+-      play(2, c("hearts", 14)),
+-      play(3, c("spades", 14)),
+-      play(0, c("diamonds", 14)),
++      play(2, c("clubs", 9)),
++      play(3, c("clubs", 7)),
++      play(0, c("hearts", 6)),
+     ]);
+     expect(resolveTrick(current)).toBe(1);
+   });
+-});
+ 
+-describe("заход джокером: по самым большим", () => {
+-  it("требует положить самую старшую карту заявленной масти", () => {
++  it("уступает чёрному джокеру, объявленному старшим козырем", () => {
+     const current = trick(1, [
+-      play(1, joker(0), {
+-        kind: "lead",
+-        mode: "demand-highest",
+-        suit: "spades",
+-      }),
++      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "clubs" }),
++      play(2, joker(1), { kind: "response", mode: "high" }),
++      play(3, c("clubs", 9)),
++      play(0, c("clubs", 6)),
+     ]);
+-    const hand = [
+-      c("spades", 7),
+-      c("spades", 13),
+-      c("spades", 9),
+-      c("hearts", 14),
+-    ];
+-    expect(playRequirement(current)).toEqual({
+-      kind: "highest-of",
+-      suit: "spades",
+-    });
+-    expect(legalPlays(hand, current).map((x) => x.id)).toEqual(["spades-13"]);
++    expect(resolveTrick(current)).toBe(2);
+   });
+ 
+-  it("разрешает любую карту и джокера, если заявленной масти нет", () => {
++  it("заход чёрным красный джокер старшим не перебивает", () => {
+     const current = trick(1, [
+-      play(1, joker(0), {
+-        kind: "lead",
+-        mode: "demand-highest",
+-        suit: "spades",
+-      }),
++      play(1, joker(1), { kind: "lead", mode: "lead-low", suit: "clubs" }),
++      play(2, joker(0), { kind: "response", mode: "high" }),
++      play(3, c("clubs", 9)),
++      play(0, c("clubs", 6)),
+     ]);
+-    const hand = [c("hearts", 7), c("clubs", 13), joker(1)];
+-    expect(legalPlays(hand, current)).toHaveLength(3);
++    expect(resolveTrick(current)).toBe(1);
+   });
+ 
+-  it("оставляет джокеру право положить джокера вместо старшей карты масти", () => {
++  it("обязывает остальных ходить в заявленную масть", () => {
+     const current = trick(1, [
+-      play(1, joker(0), {
+-        kind: "lead",
+-        mode: "demand-highest",
+-        suit: "spades",
+-      }),
++      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "clubs" }),
+     ]);
+-    const hand = [c("spades", 7), c("spades", 13), joker(1)];
++    const hand = [c("clubs", 8), c("hearts", 14), joker(1)];
+     expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+-      "spades-13",
++      "clubs-8",
+       "joker-black",
+     ]);
+   });
+-
+-  it("отдаёт взятку старшей из скинутых карт заявленной масти", () => {
+-    const current = trick(1, [
+-      play(1, joker(0), {
+-        kind: "lead",
+-        mode: "demand-highest",
+-        suit: "spades",
+-      }),
+-      play(2, c("spades", 13)),
+-      play(3, c("spades", 14)),
+-      play(0, c("hearts", 6)),
+-    ]);
+-    expect(resolveTrick(current)).toBe(3);
+-  });
+-
+-  it("оставляет взятку заходившему, если масти не оказалось ни у кого", () => {
+-    const current = trick(1, [
+-      play(1, joker(0), {
+-        kind: "lead",
+-        mode: "demand-highest",
+-        suit: "spades",
+-      }),
+-      play(2, c("hearts", 13)),
+-      play(3, c("clubs", 14)),
+-      play(0, c("diamonds", 6)),
+-    ]);
+-    expect(resolveTrick(current)).toBe(1);
+-  });
+ });
+ 
+ describe("заход джокером: слив взятки", () => {
+@@ -350,7 +283,22 @@ describe("заход джокером: слив взятки", () => {
+     expect(resolveTrick(current)).toBe(1);
+   });
+ 
+-  it("слив «заберёт младшая»: джокер, положенный младшей картой, забирает взятку", () => {
++  it("слив «заберёт младшая черви»: шестёрка бьёт короля", () => {
++    const current = trick(0, [
++      play(0, joker(0), {
++        kind: "lead",
++        mode: "dump",
++        suit: "hearts",
++        target: "lowest",
++      }),
++      play(1, c("hearts", 6)),
++      play(2, c("hearts", 13)),
++      play(3, c("clubs", 14)),
++    ]);
++    expect(resolveTrick(current)).toBe(1);
++  });
++
++  it("слив «заберёт младшая»: джокер младшей картой взятку не берёт", () => {
+     const current = trick(1, [
+       play(1, joker(0), {
+         kind: "lead",
+@@ -362,37 +310,61 @@ describe("заход джокером: слив взятки", () => {
+       play(3, c("diamonds", 12)),
+       play(0, c("diamonds", 6)),
+     ]);
+-    expect(resolveTrick(current)).toBe(2);
++    expect(resolveTrick(current)).toBe(0);
+   });
+ 
+-  it("слив «заберёт младшая»: из двух младших джокеров берёт красный", () => {
+-    const current = trick(1, [
++  it("слив «заберёт младшая»: джокер любого цвета старшим козырем забирает взятку", () => {
++    const redLeads = trick(1, [
+       play(1, joker(0), {
+         kind: "lead",
+         mode: "dump",
+-        suit: "diamonds",
++        suit: "hearts",
+         target: "lowest",
+       }),
+-      play(2, joker(1), { kind: "response", mode: "low" }),
+-      play(3, c("diamonds", 12)),
+-      play(0, joker(0), { kind: "response", mode: "low" }),
++      play(2, c("hearts", 6)),
++      play(3, joker(1), { kind: "response", mode: "high" }),
++      play(0, c("hearts", 13)),
+     ]);
+-    expect(resolveTrick(current)).toBe(0);
++    const blackLeads = trick(1, [
++      play(1, joker(1), {
++        kind: "lead",
++        mode: "dump",
++        suit: "hearts",
++        target: "lowest",
++      }),
++      play(2, joker(0), { kind: "response", mode: "high" }),
++      play(3, c("hearts", 6)),
++      play(0, c("hearts", 13)),
++    ]);
++    expect(resolveTrick(redLeads)).toBe(3);
++    expect(resolveTrick(blackLeads)).toBe(2);
+   });
+ 
+-  it("слив «заберёт младшая»: джокер старшим козырем взятку не берёт", () => {
+-    const current = trick(1, [
++  it("слив «заберёт старшая»: джокер любого цвета старшим козырем забирает взятку", () => {
++    const redLeads = trick(1, [
+       play(1, joker(0), {
+         kind: "lead",
+         mode: "dump",
+         suit: "diamonds",
+-        target: "lowest",
++        target: "highest",
+       }),
+-      play(2, joker(1), { kind: "response", mode: "high" }),
++      play(2, c("diamonds", 9)),
++      play(3, joker(1), { kind: "response", mode: "high" }),
++      play(0, c("diamonds", 6)),
++    ]);
++    const blackLeads = trick(1, [
++      play(1, joker(1), {
++        kind: "lead",
++        mode: "dump",
++        suit: "diamonds",
++        target: "highest",
++      }),
++      play(2, joker(0), { kind: "response", mode: "high" }),
+       play(3, c("diamonds", 12)),
+       play(0, c("diamonds", 6)),
+     ]);
+-    expect(resolveTrick(current)).toBe(0);
++    expect(resolveTrick(redLeads)).toBe(3);
++    expect(resolveTrick(blackLeads)).toBe(2);
+   });
+ 
+   it("слив «заберёт старшая»: джокер, положенный младшей картой, не берёт", () => {
+diff --git a/src/lib/game/ai.ts b/src/lib/game/ai.ts
+index b9eda3b..70dfcd4 100644
+--- a/src/lib/game/ai.ts
++++ b/src/lib/game/ai.ts
+@@ -121,8 +121,8 @@ function jokerLead(
+   }
+   const empty = voidSuit(hand);
+   if (empty) {
+-    // Своей масти нет: требование «по самым большим» и вытягивает чужой козырь, и отдаёт взятку.
+-    return { kind: "lead", mode: "demand-highest", suit: empty };
++    // Своей масти нет: слив отдаёт взятку тому, у кого эта масть есть.
++    return { kind: "lead", mode: "dump", suit: empty, target: "highest" };
+   }
+   const weakest = SUITS.reduce((best, suit) => {
+     const high = highestOfSuit(hand, suit);
+@@ -202,14 +202,7 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
+     return { card: highestCard(safe), declaration: null };
+   }
+   if (jokers.length > 0) {
+-    const low: JokerDeclaration = { kind: "response", mode: "low" };
+-    const high: JokerDeclaration = { kind: "response", mode: "high" };
+-    const declaration = !leadsTrickNow(trick, player, jokers[0], low)
+-      ? low
+-      : !leadsTrickNow(trick, player, jokers[0], high)
+-        ? high
+-        : low;
+-    return { card: jokers[0], declaration };
++    return { card: jokers[0], declaration: { kind: "response", mode: "low" } };
+   }
+   return { card: lowestCard(nonJokers), declaration: null };
+ }
+diff --git a/src/lib/game/engine.ts b/src/lib/game/engine.ts
+index c16d849..dd6d740 100644
+--- a/src/lib/game/engine.ts
++++ b/src/lib/game/engine.ts
+@@ -4,7 +4,6 @@ import {
+   isJoker,
+   sortHand,
+   SUIT_LABEL,
+-  SUIT_LABEL_ACCUSATIVE,
+   type Card,
+ } from "./cards";
+ import { createRng, randomSeed, shuffle } from "./rng";
+@@ -289,8 +288,6 @@ function declarationText(
+       return `${name} заходит ${joker}: ${SUIT_LABEL[declaration.suit]}, джокер старший.`;
+     case "lead-low":
+       return `${name} заходит ${joker}: ${SUIT_LABEL[declaration.suit]}, джокер младший.`;
+-    case "demand-highest":
+-      return `${name} заходит ${joker}: по самым большим ${SUIT_LABEL_ACCUSATIVE[declaration.suit]}.`;
+     case "dump":
+       return declaration.target === "highest"
+         ? `${name} сливает взятку: заберёт старшая карта (${SUIT_LABEL[declaration.suit]}).`
+diff --git a/src/lib/game/rules.ts b/src/lib/game/rules.ts
+index ee51996..5372e70 100644
+--- a/src/lib/game/rules.ts
++++ b/src/lib/game/rules.ts
+@@ -64,7 +64,7 @@ export type TrickContext = {
+   leadPlay: Play;
+   /** Масть, по которой идёт взятка: масть карты хода либо масть, объявленная джокером. */
+   suit: Suit;
+-  mode: "normal" | "lead-high" | "lead-low" | "demand-highest" | "dump";
++  mode: "normal" | "lead-high" | "lead-low" | "dump";
+   dumpTarget: "highest" | "lowest" | null;
+ };
+ 
+@@ -98,8 +98,6 @@ export function playRequirement(trick: Trick | null): PlayRequirement {
+   if (!trick) return { kind: "none" };
+   const ctx = trickContext(trick);
+   if (!ctx) return { kind: "none" };
+-  if (ctx.mode === "demand-highest")
+-    return { kind: "highest-of", suit: ctx.suit };
+   if (ctx.mode === "dump") {
+     return ctx.dumpTarget === "lowest"
+       ? { kind: "lowest-of", suit: ctx.suit }
+@@ -139,12 +137,36 @@ export function isLegalPlay(
+   return legalPlays(hand, trick).some((c) => c.id === card.id);
+ }
+ 
+-/** Джокер, объявленный наисильнейшим козырем, бьёт все обычные карты на столе. */
+-function claimsHighest(play: Play): boolean {
++/**
++ * Джокер забирает взятку у любой карты масти: заход «старший» и «младший»,
++ * а в ответ — объявление «наисильнейший козырь».
++ */
++function claimsTrick(play: Play): boolean {
+   const d = play.declaration;
+   if (!d) return false;
+   if (d.kind === "response") return d.mode === "high";
+-  return d.mode === "lead-high";
++  return d.mode === "lead-high" || d.mode === "lead-low";
++}
++
++/** Кто забрал взятку старшим козырем, если такой джокер есть. */
++function highestTrumpWinner(
++  trick: Trick,
++  shieldBlackLead: boolean,
++): PlayerId | null {
++  const ctx = trickContext(trick);
++  if (!ctx) return null;
++  const blackLed =
++    shieldBlackLead &&
++    isJoker(ctx.leadPlay.card) &&
++    ctx.leadPlay.card.color === "black";
++  const claims = trick.plays
++    .filter(claimsTrick)
++    .filter((play) => !blackLed || play === ctx.leadPlay);
++  if (claims.length === 0) return null;
++  const black = claims.find(
++    (play) => isJoker(play.card) && play.card.color === "black",
++  );
++  return (black ?? claims[0]).player;
+ }
+ 
+ function extremeOfSuit(
+@@ -170,52 +192,30 @@ function extremeOfSuit(
+ 
+ /**
+  * Взятку забирает старшая карта масти хода, с поправками на джокеров:
+- * — джокер «наисильнейший козырь» забирает взятку (если заявлены оба джокера, чёрный всегда сильнее красного;
+- *   заход чёрным джокером в любом режиме красный не перебивает);
+- * — джокер «самая младшая карта» никогда не берёт, кроме сливов «заберёт младшая»:
+- *   там он и есть самая младшая карта и взятку забирает (если таких два, младше красный);
+- * — при заходе джокером «младший», «по самым большим» и «слив» взятку забирает
+- *   соответствующая карта названной масти, а если такой масти никто не положил —
++ * — заход «джокер старший» и «джокер младший» забирает взятку у любой карты масти;
++ * — джокер «наисильнейший козырь» в ответ тоже забирает взятку; если заявлены оба, чёрный сильнее красного;
++ *   заход чёрным «старшим» или «младшим» красный так не перебивает;
++ *   на обоих сливах джокер любого цвета, объявленный старшим козырем, забирает взятку;
++ * — джокер «самая младшая карта» никогда не берёт;
++ * — слив без старшего козыря отдаёт взятку старшей или младшей карте названной масти
++ *   (на «заберёт младшая» шестёрка бьёт короля), а если такой масти никто не положил —
+  *   взятка остаётся у игрока с джокером.
+  */
+ export function resolveTrick(trick: Trick): PlayerId {
+   const ctx = trickContext(trick);
+   if (!ctx) throw new Error("Нельзя определить взявшего: во взятке нет карт");
+ 
+-  const lowestWins = ctx.mode === "dump" && ctx.dumpTarget === "lowest";
++  // На сливе старший козырь любого цвета берёт взятку даже у чёрного захода.
++  // На заходе «старший» и «младший» чёрного красный не перебивает.
++  const trump = highestTrumpWinner(trick, ctx.mode !== "dump");
++  if (trump !== null) return trump;
+ 
++  const lowestWins = ctx.mode === "dump" && ctx.dumpTarget === "lowest";
+   if (lowestWins) {
+-    // «Заберёт младшая»: джокер, положенный младшей картой, младше любой масти,
+-    // а «наисильнейший козырь» здесь, наоборот, самая старшая карта и не берёт.
+-    const lowJokers = trick.plays.filter(
+-      (p) =>
+-        isJoker(p.card) &&
+-        p.declaration?.kind === "response" &&
+-        p.declaration.mode === "low",
+-    );
+-    if (lowJokers.length > 0) {
+-      const red = lowJokers.find(
+-        (p) => isJoker(p.card) && p.card.color === "red",
+-      );
+-      return (red ?? lowJokers[0]).player;
+-    }
+     const winner = extremeOfSuit(trick.plays, ctx.suit, "lowest");
+     return winner ? winner.player : ctx.leadPlay.player;
+   }
+ 
+-  // Заход чёрным джокером нельзя перебить красным, объявленным старшим в ответ.
+-  const blackLed =
+-    isJoker(ctx.leadPlay.card) && ctx.leadPlay.card.color === "black";
+-  const highestClaims = trick.plays
+-    .filter(claimsHighest)
+-    .filter((p) => !blackLed || p === ctx.leadPlay);
+-  if (highestClaims.length > 0) {
+-    const black = highestClaims.find(
+-      (p) => isJoker(p.card) && p.card.color === "black",
+-    );
+-    return (black ?? highestClaims[0]).player;
+-  }
+-
+   const winner = extremeOfSuit(trick.plays, ctx.suit, "highest");
+   return winner ? winner.player : ctx.leadPlay.player;
+ }
+diff --git a/src/lib/game/types.ts b/src/lib/game/types.ts
+index c677129..7903c19 100644
+--- a/src/lib/game/types.ts
++++ b/src/lib/game/types.ts
+@@ -20,24 +20,18 @@ export type JokerResponseMode =
+   /** Самая младшая карта — слабее любой шестёрки. */
+   | "low";
+ 
+-/** Чем объявляет джокер игрок, который заходит. */
++/** Чем объявляет джокер игрок, который заходит. Четыре режима: старший, младший и два слива. */
+ export type JokerLeadMode =
+-  /** Джокер «старший»: задаёт масть и забирает взятку. */
++  /** Джокер «старший»: задаёт масть и забирает взятку, даже против туза. */
+   | "lead-high"
+-  /** Джокер «младший»: задаёт масть, джокер — младшая карта. */
++  /** Джокер «младший»: задаёт масть и забирает взятку, даже против шестёрки. */
+   | "lead-low"
+-  /** «По самым большим <масть>»: остальные обязаны скинуть старшую карту масти. */
+-  | "demand-highest"
+   /** Слив взятки: взятку заберёт старшая либо младшая карта названной масти. */
+   | "dump";
+ 
+ export type JokerDeclaration =
+   | { kind: "response"; mode: JokerResponseMode }
+-  | {
+-      kind: "lead";
+-      mode: "lead-high" | "lead-low" | "demand-highest";
+-      suit: Suit;
+-    }
++  | { kind: "lead"; mode: "lead-high" | "lead-low"; suit: Suit }
+   | { kind: "lead"; mode: "dump"; suit: Suit; target: "highest" | "lowest" };
+ 
+ export type Play = {
