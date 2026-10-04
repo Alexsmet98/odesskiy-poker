@@ -145,7 +145,8 @@ function extremeOfSuit(
 
 /**
  * Взятку забирает старшая карта масти хода, с поправками на джокеров:
- * — джокер «наисильнейший козырь» забирает взятку (если заявлены оба джокера, чёрный всегда сильнее красного);
+ * — джокер «наисильнейший козырь» забирает взятку (если заявлены оба джокера, чёрный всегда сильнее красного;
+ *   заход чёрным джокером в любом режиме красный не перебивает);
  * — джокер «самая младшая карта» никогда не берёт;
  * — при заходе джокером «младший», «по самым большим» и «слив» взятку забирает
  *   соответствующая карта названной масти, а если такой масти никто не положил —
@@ -155,7 +156,11 @@ export function resolveTrick(trick: Trick): PlayerId {
   const ctx = trickContext(trick);
   if (!ctx) throw new Error("Нельзя определить взявшего: во взятке нет карт");
 
-  const highestClaims = trick.plays.filter(claimsHighest);
+  // Заход чёрным джокером нельзя перебить красным, объявленным старшим в ответ.
+  const blackLed = isJoker(ctx.leadPlay.card) && ctx.leadPlay.card.color === "black";
+  const highestClaims = trick
+    .plays.filter(claimsHighest)
+    .filter((p) => !blackLed || p === ctx.leadPlay);
   if (highestClaims.length > 0) {
     const black = highestClaims.find((p) => isJoker(p.card) && p.card.color === "black");
     return (black ?? highestClaims[0]).player;

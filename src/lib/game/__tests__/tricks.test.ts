@@ -113,6 +113,30 @@ describe("джокер в ответ на чужой ход", () => {
     expect(resolveTrick(current)).toBe(1);
   });
 
+  it.each([
+    ["младшим", { kind: "lead", mode: "lead-low", suit: "clubs" } as const, 3],
+    ["сливом", { kind: "lead", mode: "dump", suit: "clubs", target: "highest" } as const, 3],
+    ["по самым большим", { kind: "lead", mode: "demand-highest", suit: "clubs" } as const, 3],
+  ])("красный джокер, объявленный старшим в ответ, не бьёт заход чёрного %s", (_name, declaration, winner) => {
+    const current = trick(1, [
+      play(1, joker(1), declaration),
+      play(2, joker(0), { kind: "response", mode: "high" }),
+      play(3, c("clubs", 14)),
+      play(0, c("clubs", 6)),
+    ]);
+    expect(resolveTrick(current)).toBe(winner);
+  });
+
+  it("красный джокер старшим в ответ бьёт заход красного младшим", () => {
+    const current = trick(1, [
+      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "clubs" }),
+      play(2, c("clubs", 14)),
+      play(3, joker(1), { kind: "response", mode: "high" }),
+      play(0, c("clubs", 6)),
+    ]);
+    expect(resolveTrick(current)).toBe(3);
+  });
+
   it("чёрный джокер, объявленный младшим, не отбирает взятку у красного старшего", () => {
     const current = trick(0, [
       play(0, c("hearts", 14)),

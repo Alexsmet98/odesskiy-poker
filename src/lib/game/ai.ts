@@ -160,8 +160,10 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
       const card = winning.reduce((best, c) => (c.rank < best.rank ? c : best));
       return { card, declaration: null };
     }
-    if (jokers.length > 0 && (isLastToPlay || ctx?.mode === "lead-high")) {
-      return { card: jokers[0], declaration: { kind: "response", mode: "high" } };
+    const high: JokerDeclaration = { kind: "response", mode: "high" };
+    const winningJoker = jokers.find((j) => leadsTrickNow(trick, player, j, high));
+    if (winningJoker && (isLastToPlay || ctx?.mode === "lead-high")) {
+      return { card: winningJoker, declaration: high };
     }
     if (nonJokers.length > 0) return { card: lowestCard(nonJokers), declaration: null };
     return { card: jokers[0], declaration: { kind: "response", mode: "high" } };
