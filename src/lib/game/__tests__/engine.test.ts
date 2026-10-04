@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { chooseBid, chooseMove } from "../ai";
 import { isJoker } from "../cards";
-import { applyAction, createGame, currentHandRow, legalBidsFor, settlement } from "../engine";
+import {
+  applyAction,
+  createGame,
+  currentHandRow,
+  legalBidsFor,
+  settlement,
+} from "../engine";
 import { isLegalBid, isLegalPlay, legalPlays } from "../rules";
 import { biddingOrder } from "../rules";
 import { buildScoreboard } from "../scoring";
@@ -15,7 +21,10 @@ function assertStateIsSane(state: GameState): void {
     const player = state.turn as PlayerId;
     const trick = state.currentTrick;
     expect(trick).not.toBeNull();
-    const options = legalPlays(state.hands[player], trick!.plays.length === 0 ? null : trick!);
+    const options = legalPlays(
+      state.hands[player],
+      trick!.plays.length === 0 ? null : trick!,
+    );
     expect(options.length).toBeGreaterThan(0);
     // Все предложенные ходы должны быть на руках у игрока.
     for (const card of options) {
@@ -28,7 +37,9 @@ function assertStateIsSane(state: GameState): void {
       .map((p) => state.bids[p])
       .filter((b): b is number => b !== null);
     const bid = chooseBid(state, player);
-    expect(isLegalBid(bid, row.cards, placed, player === state.dealer)).toBe(true);
+    expect(isLegalBid(bid, row.cards, placed, player === state.dealer)).toBe(
+      true,
+    );
   }
 }
 
@@ -44,7 +55,11 @@ describe("партия целиком", () => {
         const move = chooseMove(game, player);
         const trick = game.currentTrick!;
         expect(
-          isLegalPlay(move.card, game.hands[player], trick.plays.length === 0 ? null : trick),
+          isLegalPlay(
+            move.card,
+            game.hands[player],
+            trick.plays.length === 0 ? null : trick,
+          ),
         ).toBe(true);
         if (isJoker(move.card)) expect(move.declaration).not.toBeNull();
       }
@@ -87,7 +102,10 @@ describe("партия целиком", () => {
     const final = settlement(game);
     for (const p of PLAYER_IDS) {
       const handSum = game.results.reduce((sum, r) => sum + r.points[p], 0);
-      const premiumSum = game.premiums.reduce((sum, pr) => sum + pr.points[p], 0);
+      const premiumSum = game.premiums.reduce(
+        (sum, pr) => sum + pr.points[p],
+        0,
+      );
       expect(final.regularPoints[p]).toBe(handSum + premiumSum);
       expect(final.total[p]).toBe(final.regularPoints[p] + final.sumNs[p] * 20);
     }
@@ -98,7 +116,9 @@ describe("партия целиком", () => {
 
   it("устойчива на разных раздачах", () => {
     for (const seed of [1, 2, 3, 101, 2024, 65535]) {
-      const game = playToEnd(createGame({ seed, dealer: (seed % 4) as PlayerId }));
+      const game = playToEnd(
+        createGame({ seed, dealer: (seed % 4) as PlayerId }),
+      );
       expect(game.phase).toBe("game-over");
       expect(game.results).toHaveLength(TOTAL_HANDS);
     }
@@ -114,7 +134,11 @@ describe("защита движка от нелегальных действий
     }
     const other = game.hands[2][0];
     expect(() =>
-      applyAction(game, { type: "play", player: game.turn as PlayerId, card: other }),
+      applyAction(game, {
+        type: "play",
+        player: game.turn as PlayerId,
+        card: other,
+      }),
     ).toThrow(/нет на руках/);
   });
 
@@ -123,7 +147,8 @@ describe("защита движка от нелегальных действий
     // Доходим до раздачи, где на руках больше одной карты.
     while ((currentHandRow(game)?.cards ?? 0) < 4 || game.phase !== "playing") {
       game = stepAutomatically(game);
-      if (game.phase === "game-over") throw new Error("Партия закончилась раньше времени");
+      if (game.phase === "game-over")
+        throw new Error("Партия закончилась раньше времени");
     }
     const leader = game.turn as PlayerId;
     const lead = game.hands[leader].find((card) => !isJoker(card))!;
@@ -148,7 +173,10 @@ describe("защита движка от нелегальных действий
       if (game.phase === "playing") {
         const player = game.turn as PlayerId;
         const jokerCard = game.hands[player].find(isJoker);
-        if (jokerCard && isLegalPlay(jokerCard, game.hands[player], game.currentTrick)) {
+        if (
+          jokerCard &&
+          isLegalPlay(jokerCard, game.hands[player], game.currentTrick)
+        ) {
           expect(() =>
             applyAction(game, { type: "play", player, card: jokerCard }),
           ).toThrow(/объяв/);
@@ -164,7 +192,9 @@ describe("защита движка от нелегальных действий
   it("не даёт перейти к следующей строке, пока раздача не закрыта", () => {
     const game = createGame({ seed: 12, dealer: 0 });
     expect(() => applyAction(game, { type: "next-row" })).toThrow(/не закрыта/);
-    expect(() => applyAction(game, { type: "collect-trick" })).toThrow(/не доиграна/);
+    expect(() => applyAction(game, { type: "collect-trick" })).toThrow(
+      /не доиграна/,
+    );
   });
 });
 
@@ -206,14 +236,18 @@ describe("джокеры в протоколе", () => {
       for (const count of result.jokers) expect([0, 1, 2]).toContain(count);
       expect(result.jokers.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2);
     }
-    expect(finished.results.some((r) => r.jokers.some((n) => n > 0))).toBe(true);
+    expect(finished.results.some((r) => r.jokers.some((n) => n > 0))).toBe(
+      true,
+    );
   });
 
   it("попадает в строки протокола", () => {
     const finished = playToEnd(createGame({ seed: 20260824, dealer: 0 }));
     const rows = buildScoreboard(finished.results, finished.premiums);
     for (const row of rows.filter((r) => r.type === "hand")) {
-      const result = finished.results.find((r) => r.handIndex === row.handIndex)!;
+      const result = finished.results.find(
+        (r) => r.handIndex === row.handIndex,
+      )!;
       expect(row.cells.map((cell) => cell.jokers)).toEqual(result.jokers);
     }
   });

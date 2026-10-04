@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, createGame, currentHandRow, legalBidsFor } from "../engine";
+import {
+  applyAction,
+  createGame,
+  currentHandRow,
+  legalBidsFor,
+} from "../engine";
 import { biddingOrder, isLegalBid, legalBids } from "../rules";
 import { PLAYER_IDS, type GameState, type PlayerId } from "../types";
 import { fastForwardToRow } from "./autoplay";
@@ -79,16 +84,16 @@ describe("торговля в движке", () => {
     next = applyAction(next, { type: "bid", player: 3, value: 0 });
     // Карта одна, уже заказана одна взятка — сдающему остаётся только заказать её тоже.
     expect(legalBidsFor(next, 0)).toEqual([1]);
-    expect(() => applyAction(next, { type: "bid", player: 0, value: 0 })).toThrow(
-      /не сходимся/,
-    );
+    expect(() =>
+      applyAction(next, { type: "bid", player: 0, value: 0 }),
+    ).toThrow(/не сходимся/);
   });
 
   it("не принимает заказ вне очереди", () => {
     const game = createGame({ seed: 11, dealer: 0 });
-    expect(() => applyAction(game, { type: "bid", player: 2, value: 0 })).toThrow(
-      /очередь/,
-    );
+    expect(() =>
+      applyAction(game, { type: "bid", player: 2, value: 0 }),
+    ).toThrow(/очередь/);
   });
 
   it("в тёмных торгуется до сдачи карт", () => {

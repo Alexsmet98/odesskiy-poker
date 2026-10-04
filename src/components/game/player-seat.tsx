@@ -46,7 +46,9 @@ export function PlayerSeat({
         <div
           className={cn(
             "grid size-9 place-items-center rounded-full border text-lg",
-            isActive ? "border-ember/60 bg-black/60" : "border-white/10 bg-black/50",
+            isActive
+              ? "border-ember/60 bg-black/60"
+              : "border-white/10 bg-black/50",
           )}
         >
           <span aria-hidden>{AVATARS[playerId]}</span>
@@ -66,7 +68,9 @@ export function PlayerSeat({
             )}
           </div>
           {!compact && (
-            <p className="truncate text-[10px] text-muted-foreground">{player.tagline}</p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {player.tagline}
+            </p>
           )}
         </div>
       </div>
@@ -75,7 +79,15 @@ export function PlayerSeat({
         <span className="text-muted-foreground">
           заказ{" "}
           <span className="font-mono text-foreground">
-            {showBid ? (bid === null ? "—" : bid === 0 ? "пас" : bid) : bid === null ? "—" : "?"}
+            {showBid
+              ? bid === null
+                ? "—"
+                : bid === 0
+                  ? "пас"
+                  : bid
+              : bid === null
+                ? "—"
+                : "?"}
           </span>
         </span>
         <span className="text-muted-foreground">

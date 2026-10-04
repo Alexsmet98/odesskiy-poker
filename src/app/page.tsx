@@ -1,5 +1,5 @@
-import { GameTable } from "@/components/game/game-table";
+import { MainMenu } from "@/components/menu/main-menu";
 
 export default function Home() {
-  return <GameTable />;
+  return <MainMenu />;
 }

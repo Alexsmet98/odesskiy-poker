@@ -8,7 +8,11 @@ import type { GameState, PlayerId } from "../types";
 import { stepAutomatically } from "./autoplay";
 
 /** Собирает все ходы и заказы ботов за партию и проверяет их легальность. */
-function auditGame(seed: number): { bids: number; plays: number; jokerModes: Set<string> } {
+function auditGame(seed: number): {
+  bids: number;
+  plays: number;
+  jokerModes: Set<string>;
+} {
   let game: GameState = createGame({ seed, dealer: (seed % 4) as PlayerId });
   const jokerModes = new Set<string>();
   let bids = 0;
@@ -27,12 +31,18 @@ function auditGame(seed: number): { bids: number; plays: number; jokerModes: Set
       const trick = game.currentTrick!;
       const move = chooseMove(game, player);
       expect(
-        isLegalPlay(move.card, game.hands[player], trick.plays.length === 0 ? null : trick),
+        isLegalPlay(
+          move.card,
+          game.hands[player],
+          trick.plays.length === 0 ? null : trick,
+        ),
       ).toBe(true);
       if (isJoker(move.card)) {
         expect(move.declaration).not.toBeNull();
         const d = move.declaration!;
-        jokerModes.add(d.kind === "response" ? `response:${d.mode}` : `lead:${d.mode}`);
+        jokerModes.add(
+          d.kind === "response" ? `response:${d.mode}` : `lead:${d.mode}`,
+        );
         // Заход джокером обязан объявлять масть, ответ — нет.
         expect(d.kind).toBe(trick.plays.length === 0 ? "lead" : "response");
       }

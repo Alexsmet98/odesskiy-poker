@@ -1,14 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { cardsOfSuit } from "../cards";
-import { legalPlays, playRequirement, resolveTrick, trickContext } from "../rules";
+import {
+  legalPlays,
+  playRequirement,
+  resolveTrick,
+  trickContext,
+} from "../rules";
 import { c, joker, play, trick } from "./helpers";
 
 describe("ход в масть", () => {
   it("требует масть хода, если она есть на руках", () => {
     const current = trick(0, [play(0, c("spades", 10))]);
     const hand = [c("spades", 7), c("spades", 14), c("hearts", 13)];
-    expect(playRequirement(current)).toEqual({ kind: "follow", suit: "spades" });
-    expect(legalPlays(hand, current).map((x) => x.id)).toEqual(["spades-7", "spades-14"]);
+    expect(playRequirement(current)).toEqual({
+      kind: "follow",
+      suit: "spades",
+    });
+    expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+      "spades-7",
+      "spades-14",
+    ]);
   });
 
   it("разрешает любую карту, если масти хода нет", () => {
@@ -20,7 +31,10 @@ describe("ход в масть", () => {
   it("разрешает джокера даже при наличии масти хода", () => {
     const current = trick(0, [play(0, c("spades", 10))]);
     const hand = [c("spades", 7), joker(0)];
-    expect(legalPlays(hand, current).map((x) => x.id)).toEqual(["spades-7", "joker-red"]);
+    expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+      "spades-7",
+      "joker-red",
+    ]);
   });
 
   it("не ограничивает заходящего", () => {
@@ -115,17 +129,28 @@ describe("джокер в ответ на чужой ход", () => {
 
   it.each([
     ["младшим", { kind: "lead", mode: "lead-low", suit: "clubs" } as const, 3],
-    ["сливом", { kind: "lead", mode: "dump", suit: "clubs", target: "highest" } as const, 3],
-    ["по самым большим", { kind: "lead", mode: "demand-highest", suit: "clubs" } as const, 3],
-  ])("красный джокер, объявленный старшим в ответ, не бьёт заход чёрного %s", (_name, declaration, winner) => {
-    const current = trick(1, [
-      play(1, joker(1), declaration),
-      play(2, joker(0), { kind: "response", mode: "high" }),
-      play(3, c("clubs", 14)),
-      play(0, c("clubs", 6)),
-    ]);
-    expect(resolveTrick(current)).toBe(winner);
-  });
+    [
+      "сливом",
+      { kind: "lead", mode: "dump", suit: "clubs", target: "highest" } as const,
+      3,
+    ],
+    [
+      "по самым большим",
+      { kind: "lead", mode: "demand-highest", suit: "clubs" } as const,
+      3,
+    ],
+  ])(
+    "красный джокер, объявленный старшим в ответ, не бьёт заход чёрного %s",
+    (_name, declaration, winner) => {
+      const current = trick(1, [
+        play(1, joker(1), declaration),
+        play(2, joker(0), { kind: "response", mode: "high" }),
+        play(3, c("clubs", 14)),
+        play(0, c("clubs", 6)),
+      ]);
+      expect(resolveTrick(current)).toBe(winner);
+    },
+  );
 
   it("красный джокер старшим в ответ бьёт заход красного младшим", () => {
     const current = trick(1, [
@@ -204,16 +229,32 @@ describe("заход джокером: младший", () => {
 describe("заход джокером: по самым большим", () => {
   it("требует положить самую старшую карту заявленной масти", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "demand-highest", suit: "spades" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "demand-highest",
+        suit: "spades",
+      }),
     ]);
-    const hand = [c("spades", 7), c("spades", 13), c("spades", 9), c("hearts", 14)];
-    expect(playRequirement(current)).toEqual({ kind: "highest-of", suit: "spades" });
+    const hand = [
+      c("spades", 7),
+      c("spades", 13),
+      c("spades", 9),
+      c("hearts", 14),
+    ];
+    expect(playRequirement(current)).toEqual({
+      kind: "highest-of",
+      suit: "spades",
+    });
     expect(legalPlays(hand, current).map((x) => x.id)).toEqual(["spades-13"]);
   });
 
   it("разрешает любую карту и джокера, если заявленной масти нет", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "demand-highest", suit: "spades" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "demand-highest",
+        suit: "spades",
+      }),
     ]);
     const hand = [c("hearts", 7), c("clubs", 13), joker(1)];
     expect(legalPlays(hand, current)).toHaveLength(3);
@@ -221,15 +262,26 @@ describe("заход джокером: по самым большим", () => {
 
   it("оставляет джокеру право положить джокера вместо старшей карты масти", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "demand-highest", suit: "spades" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "demand-highest",
+        suit: "spades",
+      }),
     ]);
     const hand = [c("spades", 7), c("spades", 13), joker(1)];
-    expect(legalPlays(hand, current).map((x) => x.id)).toEqual(["spades-13", "joker-black"]);
+    expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+      "spades-13",
+      "joker-black",
+    ]);
   });
 
   it("отдаёт взятку старшей из скинутых карт заявленной масти", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "demand-highest", suit: "spades" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "demand-highest",
+        suit: "spades",
+      }),
       play(2, c("spades", 13)),
       play(3, c("spades", 14)),
       play(0, c("hearts", 6)),
@@ -239,7 +291,11 @@ describe("заход джокером: по самым большим", () => {
 
   it("оставляет взятку заходившему, если масти не оказалось ни у кого", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "demand-highest", suit: "spades" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "demand-highest",
+        suit: "spades",
+      }),
       play(2, c("hearts", 13)),
       play(3, c("clubs", 14)),
       play(0, c("diamonds", 6)),
@@ -251,7 +307,12 @@ describe("заход джокером: по самым большим", () => {
 describe("заход джокером: слив взятки", () => {
   it("отдаёт взятку старшей карте заявленной масти", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "dump", suit: "diamonds", target: "highest" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "dump",
+        suit: "diamonds",
+        target: "highest",
+      }),
       play(2, c("diamonds", 9)),
       play(3, c("diamonds", 12)),
       play(0, c("diamonds", 6)),
@@ -261,7 +322,12 @@ describe("заход джокером: слив взятки", () => {
 
   it("отдаёт взятку младшей карте, если объявлена младшая", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "dump", suit: "diamonds", target: "lowest" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "dump",
+        suit: "diamonds",
+        target: "lowest",
+      }),
       play(2, c("diamonds", 9)),
       play(3, c("diamonds", 12)),
       play(0, c("diamonds", 6)),
@@ -271,7 +337,12 @@ describe("заход джокером: слив взятки", () => {
 
   it("оставляет взятку заходившему, если заявленной масти никто не положил", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "dump", suit: "diamonds", target: "highest" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "dump",
+        suit: "diamonds",
+        target: "highest",
+      }),
       play(2, c("hearts", 9)),
       play(3, c("spades", 12)),
       play(0, c("clubs", 6)),
@@ -281,7 +352,12 @@ describe("заход джокером: слив взятки", () => {
 
   it("перебивается ответным джокером, объявленным старшим козырем", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "dump", suit: "diamonds", target: "lowest" }),
+      play(1, joker(0), {
+        kind: "lead",
+        mode: "dump",
+        suit: "diamonds",
+        target: "lowest",
+      }),
       play(2, joker(1), { kind: "response", mode: "high" }),
       play(3, c("diamonds", 12)),
       play(0, c("diamonds", 6)),

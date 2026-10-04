@@ -2,7 +2,11 @@
 
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
-import { buildScoreboard, totalJokers, type Settlement } from "@/lib/game/scoring";
+import {
+  buildScoreboard,
+  totalJokers,
+  type Settlement,
+} from "@/lib/game/scoring";
 import { PLAYER_IDS, type GameState } from "@/lib/game/types";
 
 function jokerTitle(jokers: number): string | undefined {
@@ -12,7 +16,13 @@ function jokerTitle(jokers: number): string | undefined {
 }
 
 /** Пометка джокеров как на бумаге: 1 джокер — кружок, 2 джокера — прямоугольник. */
-function JokerMark({ jokers, children }: { jokers: number; children: React.ReactNode }) {
+function JokerMark({
+  jokers,
+  children,
+}: {
+  jokers: number;
+  children: React.ReactNode;
+}) {
   if (jokers <= 0) return <>{children}</>;
   return (
     <span
@@ -67,8 +77,12 @@ export function Scoreboard({
             <th className="border border-black/25 px-1 py-1" />
             {state.players.map((player) => (
               <Fragment key={player.id}>
-                <th className="w-10 border border-black/25 px-1 py-1 font-normal">заказ</th>
-                <th className="w-14 border border-black/25 px-1 py-1 font-normal">счёт</th>
+                <th className="w-10 border border-black/25 px-1 py-1 font-normal">
+                  заказ
+                </th>
+                <th className="w-14 border border-black/25 px-1 py-1 font-normal">
+                  счёт
+                </th>
               </Fragment>
             ))}
           </tr>
@@ -85,10 +99,16 @@ export function Scoreboard({
                   row.row === currentRow && "bg-amber-300/40",
                 )}
               >
-                <td className="border border-black/25 px-1 py-1 text-center">{row.label}</td>
+                <td className="border border-black/25 px-1 py-1 text-center">
+                  {row.label}
+                </td>
                 {PLAYER_IDS.map((playerId) => {
                   const cell = row.cells[playerId];
-                  const left = isNs ? cell.tricks : isPremium ? cell.points || null : cell.bid;
+                  const left = isNs
+                    ? cell.tricks
+                    : isPremium
+                      ? cell.points || null
+                      : cell.bid;
                   return (
                     <Fragment key={`${row.row}-${playerId}`}>
                       <td className="border border-black/25 px-1 py-1 text-center">
@@ -100,7 +120,9 @@ export function Scoreboard({
                           )
                         ) : (
                           <JokerMark jokers={isNs ? cell.jokers : 0}>
-                            {left === 0 && !isNs && row.played ? "—" : cellText(left)}
+                            {left === 0 && !isNs && row.played
+                              ? "—"
+                              : cellText(left)}
                           </JokerMark>
                         )}
                       </td>
@@ -116,10 +138,28 @@ export function Scoreboard({
             );
           })}
 
-          <SummaryRow label="ОН" values={settlement.on} hint="взятки в наборах" />
-          <SummaryRow label="ОС" values={settlement.os} hint="взятки в сливах" />
-          <SummaryRow label="Сум НС" values={settlement.sumNs} hint="ОН − ОС" signed />
-          <SummaryRow label="Очки НС" values={settlement.pointsNs} hint="Сум НС × 20" signed />
+          <SummaryRow
+            label="ОН"
+            values={settlement.on}
+            hint="взятки в наборах"
+          />
+          <SummaryRow
+            label="ОС"
+            values={settlement.os}
+            hint="взятки в сливах"
+          />
+          <SummaryRow
+            label="Сум НС"
+            values={settlement.sumNs}
+            hint="ОН − ОС"
+            signed
+          />
+          <SummaryRow
+            label="Очки НС"
+            values={settlement.pointsNs}
+            hint="Сум НС × 20"
+            signed
+          />
           <SummaryRow label="Итого" values={settlement.total} strong signed />
           <SummaryRow
             label="Джокеры"

@@ -72,10 +72,17 @@ export function trickContext(trick: Trick): TrickContext | null {
   if (!leadPlay) return null;
   const declaration = leadPlay.declaration;
   if (isSuitCard(leadPlay.card)) {
-    return { leadPlay, suit: leadPlay.card.suit, mode: "normal", dumpTarget: null };
+    return {
+      leadPlay,
+      suit: leadPlay.card.suit,
+      mode: "normal",
+      dumpTarget: null,
+    };
   }
   if (!declaration || declaration.kind !== "lead") {
-    throw new Error("Заход джокером обязан содержать объявление масти и режима");
+    throw new Error(
+      "Заход джокером обязан содержать объявление масти и режима",
+    );
   }
   return {
     leadPlay,
@@ -90,7 +97,8 @@ export function playRequirement(trick: Trick | null): PlayRequirement {
   if (!trick) return { kind: "none" };
   const ctx = trickContext(trick);
   if (!ctx) return { kind: "none" };
-  if (ctx.mode === "demand-highest") return { kind: "highest-of", suit: ctx.suit };
+  if (ctx.mode === "demand-highest")
+    return { kind: "highest-of", suit: ctx.suit };
   return { kind: "follow", suit: ctx.suit };
 }
 
@@ -113,7 +121,11 @@ export function legalPlays(hand: Card[], trick: Trick | null): Card[] {
   return [...sameSuit, ...jokers];
 }
 
-export function isLegalPlay(card: Card, hand: Card[], trick: Trick | null): boolean {
+export function isLegalPlay(
+  card: Card,
+  hand: Card[],
+  trick: Trick | null,
+): boolean {
   return legalPlays(hand, trick).some((c) => c.id === card.id);
 }
 
@@ -134,7 +146,10 @@ function extremeOfSuit(
   let bestRank = target === "highest" ? -Infinity : Infinity;
   for (const play of plays) {
     if (!isSuitCard(play.card) || play.card.suit !== suit) continue;
-    const better = target === "highest" ? play.card.rank > bestRank : play.card.rank < bestRank;
+    const better =
+      target === "highest"
+        ? play.card.rank > bestRank
+        : play.card.rank < bestRank;
     if (better) {
       best = play;
       bestRank = play.card.rank;
@@ -157,16 +172,20 @@ export function resolveTrick(trick: Trick): PlayerId {
   if (!ctx) throw new Error("Нельзя определить взявшего: во взятке нет карт");
 
   // Заход чёрным джокером нельзя перебить красным, объявленным старшим в ответ.
-  const blackLed = isJoker(ctx.leadPlay.card) && ctx.leadPlay.card.color === "black";
-  const highestClaims = trick
-    .plays.filter(claimsHighest)
+  const blackLed =
+    isJoker(ctx.leadPlay.card) && ctx.leadPlay.card.color === "black";
+  const highestClaims = trick.plays
+    .filter(claimsHighest)
     .filter((p) => !blackLed || p === ctx.leadPlay);
   if (highestClaims.length > 0) {
-    const black = highestClaims.find((p) => isJoker(p.card) && p.card.color === "black");
+    const black = highestClaims.find(
+      (p) => isJoker(p.card) && p.card.color === "black",
+    );
     return (black ?? highestClaims[0]).player;
   }
 
-  const target = ctx.mode === "dump" ? (ctx.dumpTarget ?? "highest") : "highest";
+  const target =
+    ctx.mode === "dump" ? (ctx.dumpTarget ?? "highest") : "highest";
   const winner = extremeOfSuit(trick.plays, ctx.suit, target);
   return winner ? winner.player : ctx.leadPlay.player;
 }

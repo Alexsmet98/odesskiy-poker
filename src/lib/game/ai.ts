@@ -45,7 +45,10 @@ export function chooseBid(state: GameState, player: PlayerId): number {
   // Тёмные: карт ещё нет, заказ берётся от статистики — в среднем четверть взяток.
   const target =
     hand.length === 0
-      ? Math.round((row.cards / 4) * (0.6 + ((state.seed + player * 31 + row.handIndex * 7) % 9) / 10))
+      ? Math.round(
+          (row.cards / 4) *
+            (0.6 + ((state.seed + player * 31 + row.handIndex * 7) % 9) / 10),
+        )
       : Math.round(handStrength(hand));
 
   const clamped = Math.max(0, Math.min(row.cards, target));
@@ -66,7 +69,12 @@ function intentFor(state: GameState, player: PlayerId): Intent {
 }
 
 /** Победит ли карта, если взятка на этом и закончится (грубая оценка для бота). */
-function leadsTrickNow(trick: Trick, player: PlayerId, card: Card, declaration: JokerDeclaration | null): boolean {
+function leadsTrickNow(
+  trick: Trick,
+  player: PlayerId,
+  card: Card,
+  declaration: JokerDeclaration | null,
+): boolean {
   const probe: Trick = {
     leader: trick.leader,
     plays: [...trick.plays, { player, card, declaration }],
@@ -89,7 +97,9 @@ function lowestCard(cards: Card[]): Card {
 
 function longestSuit(hand: Card[]): Suit {
   return SUITS.reduce((best, suit) =>
-    cardsOfSuit(hand, suit).length > cardsOfSuit(hand, best).length ? suit : best,
+    cardsOfSuit(hand, suit).length > cardsOfSuit(hand, best).length
+      ? suit
+      : best,
   );
 }
 
@@ -100,7 +110,11 @@ function voidSuit(hand: Card[]): Suit | null {
 
 export type AiMove = { card: Card; declaration: JokerDeclaration | null };
 
-function jokerLead(state: GameState, player: PlayerId, intent: Intent): JokerDeclaration {
+function jokerLead(
+  state: GameState,
+  player: PlayerId,
+  intent: Intent,
+): JokerDeclaration {
   const hand = state.hands[player];
   if (intent === "win") {
     return { kind: "lead", mode: "lead-high", suit: longestSuit(hand) };
@@ -135,7 +149,11 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
       return { card: jokers[0], declaration: jokerLead(state, player, intent) };
     }
     // Джокером заходим, только когда взятка нужна и других козырей не осталось.
-    if (intent === "win" && jokers.length > 0 && nonJokers.every((c) => c.rank < 13)) {
+    if (
+      intent === "win" &&
+      jokers.length > 0 &&
+      nonJokers.every((c) => c.rank < 13)
+    ) {
       return { card: jokers[0], declaration: jokerLead(state, player, "win") };
     }
     // Взятка не нужна: в сливах и при одних больших картах джокером удобно отдать ход.
@@ -143,10 +161,14 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
       const lowest = lowestCard(nonJokers);
       const noSmallCards = !isSuitCard(lowest) || lowest.rank >= 11;
       if (currentHandRow(state)?.kind === "slivy" || noSmallCards) {
-        return { card: jokers[0], declaration: jokerLead(state, player, "lose") };
+        return {
+          card: jokers[0],
+          declaration: jokerLead(state, player, "lose"),
+        };
       }
     }
-    const card = intent === "win" ? highestCard(nonJokers) : lowestCard(nonJokers);
+    const card =
+      intent === "win" ? highestCard(nonJokers) : lowestCard(nonJokers);
     return { card, declaration: null };
   }
 
@@ -154,18 +176,23 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
   const isLastToPlay = trick.plays.length === 3;
 
   if (intent === "win") {
-    const winning = nonJokers.filter((c) => leadsTrickNow(trick, player, c, null));
+    const winning = nonJokers.filter((c) =>
+      leadsTrickNow(trick, player, c, null),
+    );
     if (winning.length > 0) {
       // Берём минимальной достаточной картой.
       const card = winning.reduce((best, c) => (c.rank < best.rank ? c : best));
       return { card, declaration: null };
     }
     const high: JokerDeclaration = { kind: "response", mode: "high" };
-    const winningJoker = jokers.find((j) => leadsTrickNow(trick, player, j, high));
+    const winningJoker = jokers.find((j) =>
+      leadsTrickNow(trick, player, j, high),
+    );
     if (winningJoker && (isLastToPlay || ctx?.mode === "lead-high")) {
       return { card: winningJoker, declaration: high };
     }
-    if (nonJokers.length > 0) return { card: lowestCard(nonJokers), declaration: null };
+    if (nonJokers.length > 0)
+      return { card: lowestCard(nonJokers), declaration: null };
     return { card: jokers[0], declaration: { kind: "response", mode: "high" } };
   }
 

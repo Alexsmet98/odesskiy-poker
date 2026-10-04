@@ -61,7 +61,9 @@ export function TableLog({ state }: { state: GameState }) {
         <ul className="space-y-1 text-xs">
           {state.log.map((entry) => (
             <li key={entry.id} className={cn("leading-snug", TONE[entry.tone])}>
-              <span className="mr-1.5 font-mono text-[10px] text-white/25">{entry.row}</span>
+              <span className="mr-1.5 font-mono text-[10px] text-white/25">
+                {entry.row}
+              </span>
               {entry.text}
             </li>
           ))}

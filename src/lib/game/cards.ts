@@ -8,7 +8,12 @@ export type Rank = (typeof RANKS)[number];
 export type SuitCard = { kind: "suit"; id: string; suit: Suit; rank: Rank };
 export type JokerColor = "red" | "black";
 /** Красный джокер (index 0) слабее чёрного (index 1). */
-export type JokerCard = { kind: "joker"; id: string; index: 0 | 1; color: JokerColor };
+export type JokerCard = {
+  kind: "joker";
+  id: string;
+  index: 0 | 1;
+  color: JokerColor;
+};
 export type Card = SuitCard | JokerCard;
 
 export const SUIT_LABEL: Record<Suit, string> = {
@@ -60,7 +65,8 @@ export function isSuitCard(card: Card): card is SuitCard {
 }
 
 export function cardLabel(card: Card): string {
-  if (isJoker(card)) return card.color === "black" ? "Чёрный джокер" : "Красный джокер";
+  if (isJoker(card))
+    return card.color === "black" ? "Чёрный джокер" : "Красный джокер";
   return `${RANK_LABEL[card.rank]}${SUIT_SYMBOL[card.suit]}`;
 }
 

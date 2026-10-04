@@ -2,7 +2,11 @@
 
 import { cn } from "@/lib/utils";
 import { PlayingCard } from "./playing-card";
-import { SUIT_LABEL, SUIT_LABEL_ACCUSATIVE, SUIT_SYMBOL } from "@/lib/game/cards";
+import {
+  SUIT_LABEL,
+  SUIT_LABEL_ACCUSATIVE,
+  SUIT_SYMBOL,
+} from "@/lib/game/cards";
 import { trickContext } from "@/lib/game/rules";
 import type { GameState, JokerDeclaration, Trick } from "@/lib/game/types";
 
@@ -45,7 +49,9 @@ export function TableCenter({
         <p className="font-heading text-sm uppercase tracking-[0.2em] text-amber-200/70">
           {title}
         </p>
-        {subtitle && <p className="mt-0.5 text-xs text-amber-100/50">{subtitle}</p>}
+        {subtitle && (
+          <p className="mt-0.5 text-xs text-amber-100/50">{subtitle}</p>
+        )}
       </div>
 
       {trick && trick.plays.length > 0 ? (
@@ -64,7 +70,9 @@ export function TableCenter({
               <span
                 className={cn(
                   "max-w-24 truncate text-[10px]",
-                  trick.winner === play.player ? "text-ember" : "text-amber-100/55",
+                  trick.winner === play.player
+                    ? "text-ember"
+                    : "text-amber-100/55",
                 )}
               >
                 {state.players[play.player].name}

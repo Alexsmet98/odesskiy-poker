@@ -25,7 +25,12 @@ import {
   type HandRow,
   type ScheduleRow,
 } from "./schedule";
-import { premiumRowResult, scoreHandForPlayer, settle, type Settlement } from "./scoring";
+import {
+  premiumRowResult,
+  scoreHandForPlayer,
+  settle,
+  type Settlement,
+} from "./scoring";
 import { cardsAccusative, tricksCount } from "./text";
 import {
   PLAYER_IDS,
@@ -41,9 +46,19 @@ import {
 
 export const DEFAULT_PLAYERS: Player[] = [
   { id: 0, name: "Вы", isHuman: true, tagline: "за столом впервые" },
-  { id: 1, name: "Жора Лиман", isHuman: false, tagline: "держит порт и свои карты" },
+  {
+    id: 1,
+    name: "Жора Лиман",
+    isHuman: false,
+    tagline: "держит порт и свои карты",
+  },
   { id: 2, name: "Роза", isHuman: false, tagline: "улыбается, когда блефует" },
-  { id: 3, name: "Сёма Тихий", isHuman: false, tagline: "считает всё, что упало" },
+  {
+    id: 3,
+    name: "Сёма Тихий",
+    isHuman: false,
+    tagline: "считает всё, что упало",
+  },
 ];
 
 export function currentRow(state: GameState): ScheduleRow {
@@ -81,9 +96,18 @@ function cloneState(state: GameState): GameState {
   };
 }
 
-function pushLog(state: GameState, text: string, tone: LogEntry["tone"] = "neutral"): void {
+function pushLog(
+  state: GameState,
+  text: string,
+  tone: LogEntry["tone"] = "neutral",
+): void {
   state.logCounter += 1;
-  state.log.push({ id: state.logCounter, row: currentRow(state).row, text, tone });
+  state.log.push({
+    id: state.logCounter,
+    row: currentRow(state).row,
+    text,
+    tone,
+  });
   if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
 }
 
@@ -91,7 +115,9 @@ function deal(state: GameState, cards: number): void {
   const rng = createRng((state.seed + state.rngCursor * 7919) >>> 0);
   state.rngCursor += 1;
   const deck = shuffle(createDeck(), rng);
-  state.hands = PLAYER_IDS.map((p) => sortHand(deck.slice(p * cards, p * cards + cards)));
+  state.hands = PLAYER_IDS.map((p) =>
+    sortHand(deck.slice(p * cards, p * cards + cards)),
+  );
   state.dealtJokers = state.hands.map((hand) => hand.filter(isJoker).length);
 }
 
@@ -100,10 +126,17 @@ function startRow(state: GameState): void {
   if (row.type === "premium") {
     state.phase = "premium";
     const premium = premiumRowResult(row, state.results);
-    state.premiums = [...state.premiums.filter((p) => p.row !== row.row), premium];
+    state.premiums = [
+      ...state.premiums.filter((p) => p.row !== row.row),
+      premium,
+    ];
     const winners = PLAYER_IDS.filter((p) => premium.points[p] > 0);
     if (winners.length === 0) {
-      pushLog(state, "Премия: блок прошёл без чистых заказов, никому.", "score");
+      pushLog(
+        state,
+        "Премия: блок прошёл без чистых заказов, никому.",
+        "score",
+      );
     } else {
       for (const p of winners) {
         pushLog(
@@ -173,7 +206,8 @@ export function createGame(options: CreateGameOptions = {}): GameState {
   const seed = options.seed ?? randomSeed();
   const players = options.players ?? DEFAULT_PLAYERS;
   // Первый сдающий определяется жребием.
-  const dealer = options.dealer ?? ((Math.floor(createRng(seed)() * 4) % 4) as PlayerId);
+  const dealer =
+    options.dealer ?? ((Math.floor(createRng(seed)() * 4) % 4) as PlayerId);
 
   const state: GameState = {
     seed,
@@ -197,7 +231,11 @@ export function createGame(options: CreateGameOptions = {}): GameState {
     logCounter: 0,
   };
 
-  pushLog(state, `Жребий: первым сдаёт ${state.players[dealer].name}.`, "neutral");
+  pushLog(
+    state,
+    `Жребий: первым сдаёт ${state.players[dealer].name}.`,
+    "neutral",
+  );
   startRow(state);
   return state;
 }
@@ -229,8 +267,14 @@ function declarationText(
   card: Card,
 ): string {
   const name = state.players[player].name;
-  const joker = isJoker(card) && card.color === "black" ? "чёрным джокером" : "красным джокером";
-  const jokerAcc = isJoker(card) && card.color === "black" ? "чёрного джокера" : "красного джокера";
+  const joker =
+    isJoker(card) && card.color === "black"
+      ? "чёрным джокером"
+      : "красным джокером";
+  const jokerAcc =
+    isJoker(card) && card.color === "black"
+      ? "чёрного джокера"
+      : "красного джокера";
   if (declaration.kind === "response") {
     return declaration.mode === "high"
       ? `${name} кладёт ${jokerAcc} наисильнейшим козырем.`
@@ -252,7 +296,8 @@ function declarationText(
 
 function finishHand(state: GameState): void {
   const row = currentHandRow(state);
-  if (!row) throw new Error("Нельзя завершить раздачу: текущая строка не игровая");
+  if (!row)
+    throw new Error("Нельзя завершить раздачу: текущая строка не игровая");
 
   const result: HandResult = {
     handIndex: row.handIndex,
@@ -262,16 +307,25 @@ function finishHand(state: GameState): void {
     bids: [...state.bids],
     tricks: [...state.tricksWon],
     jokers: [...state.dealtJokers],
-    points: PLAYER_IDS.map((p) => scoreHandForPlayer(row.kind, state.bids[p], state.tricksWon[p])),
+    points: PLAYER_IDS.map((p) =>
+      scoreHandForPlayer(row.kind, state.bids[p], state.tricksWon[p]),
+    ),
   };
-  state.results = [...state.results.filter((r) => r.handIndex !== row.handIndex), result];
+  state.results = [
+    ...state.results.filter((r) => r.handIndex !== row.handIndex),
+    result,
+  ];
   state.phase = "hand-complete";
   state.turn = null;
 
   for (const p of PLAYER_IDS) {
     const name = state.players[p].name;
     if (row.kind === "nabory" || row.kind === "slivy") {
-      pushLog(state, `${name}: ${tricksCount(state.tricksWon[p])} в зачёт НС.`, "score");
+      pushLog(
+        state,
+        `${name}: ${tricksCount(state.tricksWon[p])} в зачёт НС.`,
+        "score",
+      );
     } else {
       const bid = state.bids[p] ?? 0;
       const points = result.points[p];
@@ -287,8 +341,11 @@ function finishHand(state: GameState): void {
 function applyBid(state: GameState, player: PlayerId, value: number): void {
   const row = currentHandRow(state);
   if (!row || state.phase !== "bidding") throw new Error("Сейчас не торговля");
-  if (state.bidTurn !== player) throw new Error("Сейчас не ваша очередь торговаться");
-  if (!isLegalBid(value, row.cards, placedBids(state), player === state.dealer)) {
+  if (state.bidTurn !== player)
+    throw new Error("Сейчас не ваша очередь торговаться");
+  if (
+    !isLegalBid(value, row.cards, placedBids(state), player === state.dealer)
+  ) {
     throw new Error("Такой заказ запрещён правилом «не сходимся»");
   }
 
@@ -345,7 +402,9 @@ function applyPlay(
       throw new Error("Заход джокером требует объявить масть и режим");
     }
     if (!isLead && declaration.kind !== "response") {
-      throw new Error("Ответ джокером объявляется старшим козырем или младшей картой");
+      throw new Error(
+        "Ответ джокером объявляется старшим козырем или младшей картой",
+      );
     }
     finalDeclaration = declaration;
   }
@@ -354,9 +413,17 @@ function applyPlay(
   trick.plays.push({ player, card: inHand, declaration: finalDeclaration });
 
   if (finalDeclaration) {
-    pushLog(state, declarationText(state, player, finalDeclaration, inHand), "joker");
+    pushLog(
+      state,
+      declarationText(state, player, finalDeclaration, inHand),
+      "joker",
+    );
   } else {
-    pushLog(state, `${state.players[player].name}: ${cardLabel(inHand)}.`, "trick");
+    pushLog(
+      state,
+      `${state.players[player].name}: ${cardLabel(inHand)}.`,
+      "trick",
+    );
   }
 
   if (!isTrickComplete(trick)) {
@@ -369,11 +436,16 @@ function applyPlay(
   state.tricksWon[winner] += 1;
   state.phase = "trick-complete";
   state.turn = null;
-  pushLog(state, `Взятка ${state.trickNumber} — ${state.players[winner].name}.`, "trick");
+  pushLog(
+    state,
+    `Взятка ${state.trickNumber} — ${state.players[winner].name}.`,
+    "trick",
+  );
 }
 
 function applyCollectTrick(state: GameState): void {
-  if (state.phase !== "trick-complete") throw new Error("Взятка ещё не доиграна");
+  if (state.phase !== "trick-complete")
+    throw new Error("Взятка ещё не доиграна");
   const trick = state.currentTrick as Trick;
   const winner = trick.winner as PlayerId;
   state.lastTrick = trick;
@@ -404,7 +476,10 @@ function applyNextRow(state: GameState): void {
     state.phase = "game-over";
     state.rowIndex = SCHEDULE.length - 1;
     const result = settle(state.results, state.premiums);
-    const best = PLAYER_IDS.reduce((a, b) => (result.total[b] > result.total[a] ? b : a), 0);
+    const best = PLAYER_IDS.reduce(
+      (a, b) => (result.total[b] > result.total[a] ? b : a),
+      0,
+    );
     pushLog(
       state,
       `Партия закрыта. Победа: ${state.players[best].name}, ${result.total[best]} очков.`,

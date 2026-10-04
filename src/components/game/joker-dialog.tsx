@@ -10,10 +10,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { SUIT_IS_RED, SUIT_LABEL, SUIT_LABEL_ACCUSATIVE, SUIT_SYMBOL, SUITS, type Suit } from "@/lib/game/cards";
+import {
+  SUIT_IS_RED,
+  SUIT_LABEL,
+  SUIT_LABEL_ACCUSATIVE,
+  SUIT_SYMBOL,
+  SUITS,
+  type Suit,
+} from "@/lib/game/cards";
 import type { JokerDeclaration } from "@/lib/game/types";
 
-type LeadMode = "lead-high" | "lead-low" | "demand-highest" | "dump-highest" | "dump-lowest";
+type LeadMode =
+  "lead-high" | "lead-low" | "demand-highest" | "dump-highest" | "dump-lowest";
 
 const LEAD_MODES: { mode: LeadMode; title: string; hint: string }[] = [
   {
@@ -99,8 +107,12 @@ export function JokerDialog({
                       : "border-white/10 bg-black/30 hover:border-ember/40",
                   )}
                 >
-                  <span className="block font-heading text-sm tracking-wide">{option.title}</span>
-                  <span className="block text-xs text-muted-foreground">{option.hint}</span>
+                  <span className="block font-heading text-sm tracking-wide">
+                    {option.title}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {option.hint}
+                  </span>
                 </button>
               ))}
             </div>
@@ -158,7 +170,9 @@ export function JokerDialog({
               onClick={() => onConfirm({ kind: "response", mode: "high" })}
               className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-3 text-left transition-colors hover:border-ember/60 hover:bg-ember/10"
             >
-              <span className="block font-heading tracking-wide">Наисильнейший козырь</span>
+              <span className="block font-heading tracking-wide">
+                Наисильнейший козырь
+              </span>
               <span className="block text-xs text-muted-foreground">
                 Забираю взятку, даже если она уже бита тузом.
               </span>
@@ -168,7 +182,9 @@ export function JokerDialog({
               onClick={() => onConfirm({ kind: "response", mode: "low" })}
               className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-3 text-left transition-colors hover:border-ember/60 hover:bg-ember/10"
             >
-              <span className="block font-heading tracking-wide">Самая младшая карта</span>
+              <span className="block font-heading tracking-wide">
+                Самая младшая карта
+              </span>
               <span className="block text-xs text-muted-foreground">
                 Слабее шестёрки любой масти — взятку не беру.
               </span>

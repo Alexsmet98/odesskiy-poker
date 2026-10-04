@@ -3,24 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Card } from "@/lib/game/cards";
 import { aiDelay, chooseBid, chooseMove } from "@/lib/game/ai";
-import {
-  activePlayer,
-  applyAction,
-  createGame,
-  currentHandRow,
-  currentRow,
-  legalBidsFor,
-  settlement,
-} from "@/lib/game/engine";
-import { legalPlays } from "@/lib/game/rules";
+import { activePlayer, applyAction, createGame } from "@/lib/game/engine";
+import { deriveView, type GameController } from "./controller";
 import type { GameState, JokerDeclaration, PlayerId } from "@/lib/game/types";
 
 const TRICK_PAUSE_MS = 1500;
 
-export type GameController = ReturnType<typeof useGame>;
+export type { GameController } from "./controller";
 
-export function useGame(initialSeed?: number) {
-  const [state, setState] = useState<GameState>(() => createGame({ seed: initialSeed }));
+export function useGame(initialSeed?: number): GameController {
+  const [state, setState] = useState<GameState>(() =>
+    createGame({ seed: initialSeed }),
+  );
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,7 +37,6 @@ export function useGame(initialSeed?: number) {
   }, []);
 
   const acting = activePlayer(state);
-  const waitingForHuman = acting === human;
 
   // Ходы ботов и сбор доигранной взятки идут сами, с паузой — чтобы стол читался.
   useEffect(() => {
@@ -66,7 +59,11 @@ export function useGame(initialSeed?: number) {
       dispatch((prev) => {
         if (activePlayer(prev) !== bot) return prev;
         if (prev.phase === "bidding") {
-          return applyAction(prev, { type: "bid", player: bot, value: chooseBid(prev, bot) });
+          return applyAction(prev, {
+            type: "bid",
+            player: bot,
+            value: chooseBid(prev, bot),
+          });
         }
         const move = chooseMove(prev, bot);
         return applyAction(prev, {
@@ -83,28 +80,22 @@ export function useGame(initialSeed?: number) {
     };
   }, [acting, dispatch, human, state, state.phase]);
 
-  const row = currentRow(state);
-  const handRow = currentHandRow(state);
-
-  const humanLegalBids = state.phase === "bidding" ? legalBidsFor(state, human) : [];
-  const humanLegalCards =
-    state.phase === "playing" && waitingForHuman && state.currentTrick
-      ? legalPlays(
-          state.hands[human],
-          state.currentTrick.plays.length === 0 ? null : state.currentTrick,
-        )
-      : [];
+  const view = deriveView(state, human);
 
   const placeBid = useCallback(
     (value: number) => {
-      dispatch((prev) => applyAction(prev, { type: "bid", player: human, value }));
+      dispatch((prev) =>
+        applyAction(prev, { type: "bid", player: human, value }),
+      );
     },
     [dispatch, human],
   );
 
   const playCard = useCallback(
     (card: Card, declaration: JokerDeclaration | null = null) => {
-      dispatch((prev) => applyAction(prev, { type: "play", player: human, card, declaration }));
+      dispatch((prev) =>
+        applyAction(prev, { type: "play", player: human, card, declaration }),
+      );
     },
     [dispatch, human],
   );
@@ -122,17 +113,13 @@ export function useGame(initialSeed?: number) {
   return {
     state,
     human,
-    row,
-    handRow,
-    acting,
-    waitingForHuman,
-    humanLegalBids,
-    humanLegalCards,
-    settlement: settlement(state),
+    ...view,
     error,
     placeBid,
     playCard,
     nextRow,
-    restart,
+    exitLabel: "Заново",
+    finishLabel: "Новая партия",
+    exit: restart,
   };
 }

@@ -47,7 +47,11 @@ function buildSchedule(): ScheduleRow[] {
   const rows: ScheduleRow[] = [];
   let handIndex = 0;
 
-  const pushBlock = (kind: HandKind, sizes: number[], label: (cards: number) => string) => {
+  const pushBlock = (
+    kind: HandKind,
+    sizes: number[],
+    label: (cards: number) => string,
+  ) => {
     const blockHandIndices: number[] = [];
     for (const cards of sizes) {
       rows.push({
@@ -87,7 +91,9 @@ function buildSchedule(): ScheduleRow[] {
 
 export const SCHEDULE: ScheduleRow[] = buildSchedule();
 
-export const HAND_ROWS: HandRow[] = SCHEDULE.filter((r): r is HandRow => r.type === "hand");
+export const HAND_ROWS: HandRow[] = SCHEDULE.filter(
+  (r): r is HandRow => r.type === "hand",
+);
 
 export const PREMIUM_ROWS: PremiumRow[] = SCHEDULE.filter(
   (r): r is PremiumRow => r.type === "premium",

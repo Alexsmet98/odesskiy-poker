@@ -33,7 +33,11 @@ export type JokerLeadMode =
 
 export type JokerDeclaration =
   | { kind: "response"; mode: JokerResponseMode }
-  | { kind: "lead"; mode: "lead-high" | "lead-low" | "demand-highest"; suit: Suit }
+  | {
+      kind: "lead";
+      mode: "lead-high" | "lead-low" | "demand-highest";
+      suit: Suit;
+    }
   | { kind: "lead"; mode: "dump"; suit: Suit; target: "highest" | "lowest" };
 
 export type Play = {
@@ -122,6 +126,11 @@ export type GameState = {
 
 export type GameAction =
   | { type: "bid"; player: PlayerId; value: number }
-  | { type: "play"; player: PlayerId; card: Card; declaration?: JokerDeclaration | null }
+  | {
+      type: "play";
+      player: PlayerId;
+      card: Card;
+      declaration?: JokerDeclaration | null;
+    }
   | { type: "collect-trick" }
   | { type: "next-row" };

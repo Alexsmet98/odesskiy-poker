@@ -7,7 +7,11 @@ export function stepAutomatically(state: GameState): GameState {
   switch (state.phase) {
     case "bidding": {
       const player = state.bidTurn as PlayerId;
-      return applyAction(state, { type: "bid", player, value: chooseBid(state, player) });
+      return applyAction(state, {
+        type: "bid",
+        player,
+        value: chooseBid(state, player),
+      });
     }
     case "playing": {
       const player = state.turn as PlayerId;
@@ -30,7 +34,10 @@ export function stepAutomatically(state: GameState): GameState {
 }
 
 /** Прокручивает партию до начала нужной строки протокола. */
-export function fastForwardToRow(state: GameState, targetRow: number): GameState {
+export function fastForwardToRow(
+  state: GameState,
+  targetRow: number,
+): GameState {
   let game = state;
   for (let guard = 0; guard < 50000; guard += 1) {
     if (

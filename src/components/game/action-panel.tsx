@@ -2,7 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { SUIT_LABEL, SUIT_LABEL_ACCUSATIVE, SUIT_SYMBOL } from "@/lib/game/cards";
+import {
+  SUIT_LABEL,
+  SUIT_LABEL_ACCUSATIVE,
+  SUIT_SYMBOL,
+} from "@/lib/game/cards";
 import { playRequirement, trickContext } from "@/lib/game/rules";
 import { HAND_KIND_LABEL } from "@/lib/game/schedule";
 import { tricksCount } from "@/lib/game/text";
@@ -11,7 +15,8 @@ import type { GameController } from "./use-game";
 /** Подсказка, что именно сейчас обязан положить игрок. */
 function requirementHint(game: GameController): string | null {
   const trick = game.state.currentTrick;
-  if (!trick || trick.plays.length === 0) return "Вы заходите — можно любую карту.";
+  if (!trick || trick.plays.length === 0)
+    return "Вы заходите — можно любую карту.";
   const ctx = trickContext(trick);
   const requirement = playRequirement(trick);
   if (!ctx) return null;
@@ -30,7 +35,9 @@ export function ActionPanel({ game }: { game: GameController }) {
     );
     return (
       <Panel>
-        <p className="font-heading text-lg tracking-wide text-ember">Партия закрыта</p>
+        <p className="font-heading text-lg tracking-wide text-ember">
+          Партия закрыта
+        </p>
         <ol className="w-full space-y-1 text-sm">
           {order.map((player, index) => (
             <li
@@ -40,21 +47,27 @@ export function ActionPanel({ game }: { game: GameController }) {
               <span className={cn(player.isHuman && "text-ember")}>
                 {index + 1}. {player.name}
               </span>
-              <span className="font-mono">{game.settlement.total[player.id]}</span>
+              <span className="font-mono">
+                {game.settlement.total[player.id]}
+              </span>
             </li>
           ))}
         </ol>
-        <Button onClick={game.restart}>Новая партия</Button>
+        <Button onClick={game.exit}>{game.finishLabel}</Button>
       </Panel>
     );
   }
 
   if (state.phase === "premium") {
     const premium = state.premiums.find((p) => p.row === game.row.row);
-    const winners = state.players.filter((p) => (premium?.points[p.id] ?? 0) > 0);
+    const winners = state.players.filter(
+      (p) => (premium?.points[p.id] ?? 0) > 0,
+    );
     return (
       <Panel>
-        <p className="font-heading text-lg tracking-wide text-ember">Премия за блок</p>
+        <p className="font-heading text-lg tracking-wide text-ember">
+          Премия за блок
+        </p>
         {winners.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Никто не прошёл блок без промаха — премия не начисляется.
@@ -63,10 +76,15 @@ export function ActionPanel({ game }: { game: GameController }) {
           <ul className="space-y-1 text-sm">
             {winners.map((player) => (
               <li key={player.id}>
-                <span className={cn(player.isHuman && "text-ember")}>{player.name}</span>
+                <span className={cn(player.isHuman && "text-ember")}>
+                  {player.name}
+                </span>
                 {": "}
                 <span className="font-mono">+{premium?.points[player.id]}</span>
-                <span className="text-muted-foreground"> — все заказы блока точно в цель</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  — все заказы блока точно в цель
+                </span>
               </li>
             ))}
           </ul>
@@ -77,7 +95,9 @@ export function ActionPanel({ game }: { game: GameController }) {
   }
 
   if (state.phase === "hand-complete") {
-    const result = state.results.find((r) => r.handIndex === handRow?.handIndex);
+    const result = state.results.find(
+      (r) => r.handIndex === handRow?.handIndex,
+    );
     const isNs = result?.kind === "nabory" || result?.kind === "slivy";
     return (
       <Panel>
@@ -94,7 +114,9 @@ export function ActionPanel({ game }: { game: GameController }) {
                 key={player.id}
                 className="flex items-center justify-between gap-3 border-b border-white/5 pb-1 last:border-0"
               >
-                <span className={cn(player.isHuman && "text-ember")}>{player.name}</span>
+                <span className={cn(player.isHuman && "text-ember")}>
+                  {player.name}
+                </span>
                 <span className="font-mono text-xs text-muted-foreground">
                   {isNs
                     ? `${tricksCount(tricks)} в зачёт НС`
@@ -104,7 +126,11 @@ export function ActionPanel({ game }: { game: GameController }) {
                   <span
                     className={cn(
                       "w-12 text-right font-mono",
-                      points > 0 ? "text-emerald-400" : points < 0 ? "text-red-400" : "",
+                      points > 0
+                        ? "text-emerald-400"
+                        : points < 0
+                          ? "text-red-400"
+                          : "",
                     )}
                   >
                     {points > 0 ? "+" : ""}
@@ -141,7 +167,9 @@ export function ActionPanel({ game }: { game: GameController }) {
     const placed = state.bids.reduce<number>((sum, b) => sum + (b ?? 0), 0);
     return (
       <Panel>
-        <p className="font-heading text-lg tracking-wide text-ember">Ваш заказ</p>
+        <p className="font-heading text-lg tracking-wide text-ember">
+          Ваш заказ
+        </p>
         <p className="text-xs text-muted-foreground">
           {handRow?.kind === "dark"
             ? "Тёмные: заказ вслепую, карты ещё не сданы."
@@ -174,8 +202,8 @@ export function ActionPanel({ game }: { game: GameController }) {
         </div>
         {isDealer && (
           <p className="text-[11px] text-amber-200/70">
-            Вы сдаёте и торгуетесь последним: не сходимся — сумма заказов не должна стать{" "}
-            {cards}. Уже заказано {placed}.
+            Вы сдаёте и торгуетесь последним: не сходимся — сумма заказов не
+            должна стать {cards}. Уже заказано {placed}.
           </p>
         )}
       </Panel>
@@ -187,7 +215,10 @@ export function ActionPanel({ game }: { game: GameController }) {
     return (
       <Panel>
         <p className="font-heading text-lg tracking-wide text-ember">
-          Взятку забрал {winner !== null && winner !== undefined ? state.players[winner].name : "—"}
+          Взятку забрал{" "}
+          {winner !== null && winner !== undefined
+            ? state.players[winner].name
+            : "—"}
         </p>
         <p className="text-xs text-muted-foreground">Следующий ход — за ним.</p>
       </Panel>
@@ -202,7 +233,9 @@ export function ActionPanel({ game }: { game: GameController }) {
         </p>
         <p className="text-xs text-amber-200/50">
           {handRow ? HAND_KIND_LABEL[handRow.kind] : ""}
-          {handRow && handRow.kind === "normal" ? `, ${handRow.cards} карт` : ""}
+          {handRow && handRow.kind === "normal"
+            ? `, ${handRow.cards} карт`
+            : ""}
         </p>
       </Panel>
     );
@@ -210,11 +243,13 @@ export function ActionPanel({ game }: { game: GameController }) {
 
   const goal = (() => {
     if (!handRow) return null;
-    if (handRow.kind === "nabory") return "Наборы: берите как можно больше взяток.";
+    if (handRow.kind === "nabory")
+      return "Наборы: берите как можно больше взяток.";
     if (handRow.kind === "slivy") return "Сливы: каждая взятка — во вред.";
     const bid = state.bids[human] ?? 0;
     const taken = state.tricksWon[human];
-    if (bid === 0) return `Вы пасовали. Взято ${taken} — пас держится, пока вы не берёте.`;
+    if (bid === 0)
+      return `Вы пасовали. Взято ${taken} — пас держится, пока вы не берёте.`;
     const left = Math.max(0, bid - taken);
     return left === 0
       ? `Ваш заказ ${bid}, взято ${taken} — заказ выполнен, лишние взятки его сломают.`

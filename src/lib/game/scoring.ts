@@ -29,7 +29,11 @@ export function handPoints(bid: number, tricks: number): number {
  * Очки за раздачу с учётом её типа.
  * Наборы и сливы в столбец очков не пишутся — их взятки идут в зачёт НС в конце партии.
  */
-export function scoreHandForPlayer(kind: HandKind, bid: number | null, tricks: number): number {
+export function scoreHandForPlayer(
+  kind: HandKind,
+  bid: number | null,
+  tricks: number,
+): number {
   if (kind === "nabory" || kind === "slivy") return 0;
   if (bid === null) return 0;
   return handPoints(bid, tricks);
@@ -48,19 +52,29 @@ export type PremiumAward = {
  * Размер: очки за раздачу с самым большим заказом, удвоенные и начисленные целиком
  * (заказ 4 → 2 × 40 = 80; блок из одних выполненных пасов → 2 × 5 = 10).
  */
-export function premiumForBlock(bids: (number | null)[], tricks: number[]): PremiumAward {
+export function premiumForBlock(
+  bids: (number | null)[],
+  tricks: number[],
+): PremiumAward {
   if (bids.length === 0 || bids.length !== tricks.length) {
     return { qualified: false, largestBid: null, points: 0 };
   }
   const qualified = bids.every((bid, i) => bid !== null && bid === tricks[i]);
   if (!qualified) return { qualified: false, largestBid: null, points: 0 };
 
-  const largestBid = bids.reduce<number>((max, bid) => Math.max(max, bid ?? 0), 0);
-  const base = largestBid === 0 ? PASS_POINTS : largestBid * POINTS_PER_ORDERED_TRICK;
+  const largestBid = bids.reduce<number>(
+    (max, bid) => Math.max(max, bid ?? 0),
+    0,
+  );
+  const base =
+    largestBid === 0 ? PASS_POINTS : largestBid * POINTS_PER_ORDERED_TRICK;
   return { qualified: true, largestBid, points: base * PREMIUM_MULTIPLIER };
 }
 
-export function premiumRowResult(row: PremiumRow, results: HandResult[]): PremiumResult {
+export function premiumRowResult(
+  row: PremiumRow,
+  results: HandResult[],
+): PremiumResult {
   const blockResults = row.blockHandIndices
     .map((handIndex) => results.find((r) => r.handIndex === handIndex))
     .filter((r): r is HandResult => r !== undefined);
@@ -90,7 +104,10 @@ export type Settlement = {
   total: number[];
 };
 
-export function settle(results: HandResult[], premiums: PremiumResult[]): Settlement {
+export function settle(
+  results: HandResult[],
+  premiums: PremiumResult[],
+): Settlement {
   const regularPoints = PLAYER_IDS.map(
     (p) =>
       results.reduce((sum, r) => sum + r.points[p], 0) +
@@ -98,7 +115,9 @@ export function settle(results: HandResult[], premiums: PremiumResult[]): Settle
   );
   const sumTricks = (kind: HandKind) =>
     PLAYER_IDS.map((p) =>
-      results.filter((r) => r.kind === kind).reduce((sum, r) => sum + r.tricks[p], 0),
+      results
+        .filter((r) => r.kind === kind)
+        .reduce((sum, r) => sum + r.tricks[p], 0),
     );
 
   const on = sumTricks("nabory");
@@ -112,7 +131,9 @@ export function settle(results: HandResult[], premiums: PremiumResult[]): Settle
 
 /** Сколько джокеров побывало на руках у каждого игрока за все сыгранные раздачи. */
 export function totalJokers(results: HandResult[]): number[] {
-  return PLAYER_IDS.map((p) => results.reduce((sum, r) => sum + (r.jokers[p] ?? 0), 0));
+  return PLAYER_IDS.map((p) =>
+    results.reduce((sum, r) => sum + (r.jokers[p] ?? 0), 0),
+  );
 }
 
 export type ScoreboardCell = {
