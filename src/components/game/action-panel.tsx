@@ -21,9 +21,7 @@ function requirementHint(game: GameController): string | null {
   const requirement = playRequirement(trick);
   if (!ctx) return null;
   if (requirement.kind === "highest-of") {
-    return ctx.mode === "dump"
-      ? `Слив: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`
-      : `Требование: по самым большим ${SUIT_LABEL_ACCUSATIVE[requirement.suit]}. Джокера можно положить всегда.`;
+    return `Слив: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`;
   }
   if (requirement.kind === "lowest-of") {
     return `Слив: нужно положить самую младшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`;

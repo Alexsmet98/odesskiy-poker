@@ -2,11 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { PlayingCard } from "./playing-card";
-import {
-  SUIT_LABEL,
-  SUIT_LABEL_ACCUSATIVE,
-  SUIT_SYMBOL,
-} from "@/lib/game/cards";
+import { SUIT_LABEL, SUIT_SYMBOL } from "@/lib/game/cards";
 import { trickContext } from "@/lib/game/rules";
 import type { GameState, JokerDeclaration, Trick } from "@/lib/game/types";
 
@@ -19,8 +15,6 @@ function declarationBadge(declaration: JokerDeclaration): string {
       return `${SUIT_SYMBOL[declaration.suit]} джокер старший`;
     case "lead-low":
       return `${SUIT_SYMBOL[declaration.suit]} джокер младший`;
-    case "demand-highest":
-      return `по самым большим ${SUIT_LABEL_ACCUSATIVE[declaration.suit]}`;
     case "dump":
       return declaration.target === "highest"
         ? `слив: старшая ${SUIT_SYMBOL[declaration.suit]}`

@@ -121,8 +121,8 @@ function jokerLead(
   }
   const empty = voidSuit(hand);
   if (empty) {
-    // Своей масти нет: требование «по самым большим» и вытягивает чужой козырь, и отдаёт взятку.
-    return { kind: "lead", mode: "demand-highest", suit: empty };
+    // Своей масти нет: слив отдаёт взятку тому, у кого эта масть есть.
+    return { kind: "lead", mode: "dump", suit: empty, target: "highest" };
   }
   const weakest = SUITS.reduce((best, suit) => {
     const high = highestOfSuit(hand, suit);
@@ -202,14 +202,7 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
     return { card: highestCard(safe), declaration: null };
   }
   if (jokers.length > 0) {
-    const low: JokerDeclaration = { kind: "response", mode: "low" };
-    const high: JokerDeclaration = { kind: "response", mode: "high" };
-    const declaration = !leadsTrickNow(trick, player, jokers[0], low)
-      ? low
-      : !leadsTrickNow(trick, player, jokers[0], high)
-        ? high
-        : low;
-    return { card: jokers[0], declaration };
+    return { card: jokers[0], declaration: { kind: "response", mode: "low" } };
   }
   return { card: lowestCard(nonJokers), declaration: null };
 }

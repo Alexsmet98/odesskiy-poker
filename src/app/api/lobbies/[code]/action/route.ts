@@ -24,11 +24,7 @@ function parseDeclaration(raw: unknown): JokerDeclaration | null {
   if (d.kind === "lead") {
     const suit = SUITS.find((s) => s === d.suit);
     if (!suit) throw bad();
-    if (
-      d.mode === "lead-high" ||
-      d.mode === "lead-low" ||
-      d.mode === "demand-highest"
-    ) {
+    if (d.mode === "lead-high" || d.mode === "lead-low") {
       return { kind: "lead", mode: d.mode, suit };
     }
     if (

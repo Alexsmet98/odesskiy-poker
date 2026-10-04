@@ -20,24 +20,18 @@ export type JokerResponseMode =
   /** Самая младшая карта — слабее любой шестёрки. */
   | "low";
 
-/** Чем объявляет джокер игрок, который заходит. */
+/** Чем объявляет джокер игрок, который заходит. Четыре режима: старший, младший и два слива. */
 export type JokerLeadMode =
-  /** Джокер «старший»: задаёт масть и забирает взятку. */
+  /** Джокер «старший»: задаёт масть и забирает взятку, даже против туза. */
   | "lead-high"
-  /** Джокер «младший»: задаёт масть, джокер — младшая карта. */
+  /** Джокер «младший»: задаёт масть и забирает взятку, даже против шестёрки. */
   | "lead-low"
-  /** «По самым большим <масть>»: остальные обязаны скинуть старшую карту масти. */
-  | "demand-highest"
   /** Слив взятки: взятку заберёт старшая либо младшая карта названной масти. */
   | "dump";
 
 export type JokerDeclaration =
   | { kind: "response"; mode: JokerResponseMode }
-  | {
-      kind: "lead";
-      mode: "lead-high" | "lead-low" | "demand-highest";
-      suit: Suit;
-    }
+  | { kind: "lead"; mode: "lead-high" | "lead-low"; suit: Suit }
   | { kind: "lead"; mode: "dump"; suit: Suit; target: "highest" | "lowest" };
 
 export type Play = {

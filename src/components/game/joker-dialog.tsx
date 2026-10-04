@@ -13,55 +13,45 @@ import { cn } from "@/lib/utils";
 import {
   SUIT_IS_RED,
   SUIT_LABEL,
-  SUIT_LABEL_ACCUSATIVE,
   SUIT_SYMBOL,
   SUITS,
   type Suit,
 } from "@/lib/game/cards";
 import type { JokerDeclaration } from "@/lib/game/types";
 
-type LeadMode =
-  "lead-high" | "lead-low" | "demand-highest" | "dump-highest" | "dump-lowest";
+type LeadMode = "lead-high" | "lead-low" | "dump-highest" | "dump-lowest";
 
 const LEAD_MODES: { mode: LeadMode; title: string; hint: string }[] = [
   {
     mode: "lead-high",
     title: "Джокер старший",
-    hint: "Задаёте масть, остальные ходят в неё, взятка ваша.",
+    hint: "Задаёте масть, остальные ходят в неё. Взятка ваша, даже против туза.",
   },
   {
     mode: "lead-low",
     title: "Джокер младший",
-    hint: "Джокер — младшая карта. Если масти ни у кого нет, взятка всё равно ваша.",
-  },
-  {
-    mode: "demand-highest",
-    title: "По самым большим",
-    hint: "Все обязаны скинуть самую большую карту названной масти.",
+    hint: "Задаёте масть, остальные ходят в неё. Взятка ваша, даже против шестёрки.",
   },
   {
     mode: "dump-highest",
     title: "Слив: заберёт старшая",
-    hint: "Взятку забирает старшая карта названной масти.",
+    hint: "Взятку забирает старшая карта названной масти. Джокер «старшим козырем» забирает её любого цвета.",
   },
   {
     mode: "dump-lowest",
     title: "Слив: заберёт младшая",
-    hint: "Взятку забирает младшая карта названной масти.",
+    hint: "Взятку забирает младшая карта названной масти. Джокер «старшим козырем» забирает её любого цвета.",
   },
 ];
 
 export function JokerDialog({
   open,
   isLead,
-  lowJokerWins = false,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
   isLead: boolean;
-  /** Слив «заберёт младшая»: джокер младшей картой забирает взятку. */
-  lowJokerWins?: boolean;
   onCancel: () => void;
   onConfirm: (declaration: JokerDeclaration) => void;
 }) {
@@ -146,17 +136,15 @@ export function JokerDialog({
             </div>
 
             <p className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-xs text-muted-foreground">
-              {mode === "demand-highest"
-                ? `Объявляю: по самым большим ${SUIT_LABEL_ACCUSATIVE[suit]}.`
-                : `Объявляю: ${SUIT_LABEL[suit]}, ${
-                    mode === "lead-high"
-                      ? "джокер старший"
-                      : mode === "lead-low"
-                        ? "джокер младший"
-                        : mode === "dump-highest"
-                          ? "взятку заберёт старшая"
-                          : "взятку заберёт младшая"
-                  }.`}
+              {`Объявляю: ${SUIT_LABEL[suit]}, ${
+                mode === "lead-high"
+                  ? "джокер старший"
+                  : mode === "lead-low"
+                    ? "джокер младший"
+                    : mode === "dump-highest"
+                      ? "взятку заберёт старшая"
+                      : "взятку заберёт младшая"
+              }.`}
             </p>
 
             <div className="flex justify-end gap-2">
@@ -189,9 +177,7 @@ export function JokerDialog({
                 Самая младшая карта
               </span>
               <span className="block text-xs text-muted-foreground">
-                {lowJokerWins
-                  ? "Слив «заберёт младшая»: младший джокер — самая младшая карта, взятка будет ваша."
-                  : "Слабее шестёрки любой масти — взятку не беру."}
+                Слабее шестёрки любой масти — взятку не беру.
               </span>
             </button>
             <div className="flex justify-end">

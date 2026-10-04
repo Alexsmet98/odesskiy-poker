@@ -4,7 +4,6 @@ import {
   isJoker,
   sortHand,
   SUIT_LABEL,
-  SUIT_LABEL_ACCUSATIVE,
   type Card,
 } from "./cards";
 import { createRng, randomSeed, shuffle } from "./rng";
@@ -289,8 +288,6 @@ function declarationText(
       return `${name} заходит ${joker}: ${SUIT_LABEL[declaration.suit]}, джокер старший.`;
     case "lead-low":
       return `${name} заходит ${joker}: ${SUIT_LABEL[declaration.suit]}, джокер младший.`;
-    case "demand-highest":
-      return `${name} заходит ${joker}: по самым большим ${SUIT_LABEL_ACCUSATIVE[declaration.suit]}.`;
     case "dump":
       return declaration.target === "highest"
         ? `${name} сливает взятку: заберёт старшая карта (${SUIT_LABEL[declaration.suit]}).`

@@ -64,7 +64,7 @@ export type TrickContext = {
   leadPlay: Play;
   /** Масть, по которой идёт взятка: масть карты хода либо масть, объявленная джокером. */
   suit: Suit;
-  mode: "normal" | "lead-high" | "lead-low" | "demand-highest" | "dump";
+  mode: "normal" | "lead-high" | "lead-low" | "dump";
   dumpTarget: "highest" | "lowest" | null;
 };
 
@@ -98,8 +98,6 @@ export function playRequirement(trick: Trick | null): PlayRequirement {
   if (!trick) return { kind: "none" };
   const ctx = trickContext(trick);
   if (!ctx) return { kind: "none" };
-  if (ctx.mode === "demand-highest")
-    return { kind: "highest-of", suit: ctx.suit };
   if (ctx.mode === "dump") {
     return ctx.dumpTarget === "lowest"
       ? { kind: "lowest-of", suit: ctx.suit }
@@ -139,12 +137,36 @@ export function isLegalPlay(
   return legalPlays(hand, trick).some((c) => c.id === card.id);
 }
 
-/** Джокер, объявленный наисильнейшим козырем, бьёт все обычные карты на столе. */
-function claimsHighest(play: Play): boolean {
+/**
+ * Джокер забирает взятку у любой карты масти: заход «старший» и «младший»,
+ * а в ответ — объявление «наисильнейший козырь».
+ */
+function claimsTrick(play: Play): boolean {
   const d = play.declaration;
   if (!d) return false;
   if (d.kind === "response") return d.mode === "high";
-  return d.mode === "lead-high";
+  return d.mode === "lead-high" || d.mode === "lead-low";
+}
+
+/** Кто забрал взятку старшим козырем, если такой джокер есть. */
+function highestTrumpWinner(
+  trick: Trick,
+  shieldBlackLead: boolean,
+): PlayerId | null {
+  const ctx = trickContext(trick);
+  if (!ctx) return null;
+  const blackLed =
+    shieldBlackLead &&
+    isJoker(ctx.leadPlay.card) &&
+    ctx.leadPlay.card.color === "black";
+  const claims = trick.plays
+    .filter(claimsTrick)
+    .filter((play) => !blackLed || play === ctx.leadPlay);
+  if (claims.length === 0) return null;
+  const black = claims.find(
+    (play) => isJoker(play.card) && play.card.color === "black",
+  );
+  return (black ?? claims[0]).player;
 }
 
 function extremeOfSuit(
@@ -170,50 +192,28 @@ function extremeOfSuit(
 
 /**
  * Взятку забирает старшая карта масти хода, с поправками на джокеров:
- * — джокер «наисильнейший козырь» забирает взятку (если заявлены оба джокера, чёрный всегда сильнее красного;
- *   заход чёрным джокером в любом режиме красный не перебивает);
- * — джокер «самая младшая карта» никогда не берёт, кроме сливов «заберёт младшая»:
- *   там он и есть самая младшая карта и взятку забирает (если таких два, младше красный);
- * — при заходе джокером «младший», «по самым большим» и «слив» взятку забирает
- *   соответствующая карта названной масти, а если такой масти никто не положил —
+ * — заход «джокер старший» и «джокер младший» забирает взятку у любой карты масти;
+ * — джокер «наисильнейший козырь» в ответ тоже забирает взятку; если заявлены оба, чёрный сильнее красного;
+ *   заход чёрным «старшим» или «младшим» красный так не перебивает;
+ *   на обоих сливах джокер любого цвета, объявленный старшим козырем, забирает взятку;
+ * — джокер «самая младшая карта» никогда не берёт;
+ * — слив без старшего козыря отдаёт взятку старшей или младшей карте названной масти
+ *   (на «заберёт младшая» шестёрка бьёт короля), а если такой масти никто не положил —
  *   взятка остаётся у игрока с джокером.
  */
 export function resolveTrick(trick: Trick): PlayerId {
   const ctx = trickContext(trick);
   if (!ctx) throw new Error("Нельзя определить взявшего: во взятке нет карт");
 
-  const lowestWins = ctx.mode === "dump" && ctx.dumpTarget === "lowest";
+  // На сливе старший козырь любого цвета берёт взятку даже у чёрного захода.
+  // На заходе «старший» и «младший» чёрного красный не перебивает.
+  const trump = highestTrumpWinner(trick, ctx.mode !== "dump");
+  if (trump !== null) return trump;
 
+  const lowestWins = ctx.mode === "dump" && ctx.dumpTarget === "lowest";
   if (lowestWins) {
-    // «Заберёт младшая»: джокер, положенный младшей картой, младше любой масти,
-    // а «наисильнейший козырь» здесь, наоборот, самая старшая карта и не берёт.
-    const lowJokers = trick.plays.filter(
-      (p) =>
-        isJoker(p.card) &&
-        p.declaration?.kind === "response" &&
-        p.declaration.mode === "low",
-    );
-    if (lowJokers.length > 0) {
-      const red = lowJokers.find(
-        (p) => isJoker(p.card) && p.card.color === "red",
-      );
-      return (red ?? lowJokers[0]).player;
-    }
     const winner = extremeOfSuit(trick.plays, ctx.suit, "lowest");
     return winner ? winner.player : ctx.leadPlay.player;
-  }
-
-  // Заход чёрным джокером нельзя перебить красным, объявленным старшим в ответ.
-  const blackLed =
-    isJoker(ctx.leadPlay.card) && ctx.leadPlay.card.color === "black";
-  const highestClaims = trick.plays
-    .filter(claimsHighest)
-    .filter((p) => !blackLed || p === ctx.leadPlay);
-  if (highestClaims.length > 0) {
-    const black = highestClaims.find(
-      (p) => isJoker(p.card) && p.card.color === "black",
-    );
-    return (black ?? highestClaims[0]).player;
   }
 
   const winner = extremeOfSuit(trick.plays, ctx.suit, "highest");
