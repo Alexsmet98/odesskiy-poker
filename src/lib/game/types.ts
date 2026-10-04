@@ -59,7 +59,9 @@ export type PlayRequirement =
   /** Обязателен ход в масть, если она есть на руках. */
   | { kind: "follow"; suit: Suit }
   /** Обязательна самая старшая карта масти, если масть есть на руках. */
-  | { kind: "highest-of"; suit: Suit };
+  | { kind: "highest-of"; suit: Suit }
+  /** Обязательна самая младшая карта масти, если масть есть на руках. */
+  | { kind: "lowest-of"; suit: Suit };
 
 export type HandResult = {
   handIndex: number;
@@ -96,6 +98,8 @@ export type LogEntry = {
   row: number;
   text: string;
   tone: "neutral" | "bid" | "trick" | "joker" | "score";
+  /** Номер взятки в раздаче: записи о ходах старых взяток из журнала скрываются. */
+  trick?: number;
 };
 
 export type GameState = {
@@ -133,4 +137,15 @@ export type GameAction =
       declaration?: JokerDeclaration | null;
     }
   | { type: "collect-trick" }
-  | { type: "next-row" };
+  | { type: "next-row" }
+  | ({ type: "edit-result" } & ResultEdit);
+
+/** Правка хозяина лобби в протоколе: одна клетка сыгранной раздачи. */
+export type ResultEdit = {
+  handIndex: number;
+  player: PlayerId;
+  /** Новый заказ; в наборах и сливах заказа нет. */
+  bid?: number;
+  tricks?: number;
+  jokers?: number;
+};

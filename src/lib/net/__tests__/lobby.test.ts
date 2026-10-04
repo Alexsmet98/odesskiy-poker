@@ -404,3 +404,24 @@ describe("лобби: long-poll вместо SSE", () => {
     expect(scheduler.pending).toBeGreaterThan(0);
   });
 });
+
+describe("лобби: правка протокола", () => {
+  it("доступна только хозяину", () => {
+    const { manager, code, tokens } = fullLobby();
+    manager.start(code, tokens[0]);
+    const edit = {
+      type: "edit-result" as const,
+      handIndex: 0,
+      player: 1 as const,
+      tricks: 1,
+    };
+    expect(() => manager.act(code, tokens[1], edit)).toThrow(/хозяин/);
+    try {
+      manager.act(code, tokens[1], edit);
+    } catch (e) {
+      expect((e as LobbyError).status).toBe(403);
+    }
+    // Хозяин проходит проверку прав и упирается только в то, что раздача не сыграна.
+    expect(() => manager.act(code, tokens[0], edit)).toThrow(/не сыграна/);
+  });
+});

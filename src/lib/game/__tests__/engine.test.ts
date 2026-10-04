@@ -8,6 +8,7 @@ import {
   legalBidsFor,
   settlement,
 } from "../engine";
+import { visibleLog } from "../log";
 import { isLegalBid, isLegalPlay, legalPlays } from "../rules";
 import { biddingOrder } from "../rules";
 import { buildScoreboard } from "../scoring";
@@ -250,5 +251,98 @@ describe("джокеры в протоколе", () => {
       )!;
       expect(row.cells.map((cell) => cell.jokers)).toEqual(result.jokers);
     }
+  });
+});
+
+describe("журнал: только последняя взятка", () => {
+  it("прячет ходы старых взяток, но оставляет заказы и итоги", () => {
+    let game = createGame({ seed: 4242, dealer: 0 });
+    while ((currentHandRow(game)?.cards ?? 0) < 4) {
+      game = stepAutomatically(game);
+    }
+    while (game.phase !== "hand-complete") {
+      game = stepAutomatically(game);
+      for (const entry of visibleLog(game)) {
+        if (entry.trick !== undefined) {
+          expect(entry.row).toBe(game.log[game.log.length - 1].row);
+          expect(entry.trick).toBeGreaterThanOrEqual(game.trickNumber - 1);
+        }
+      }
+    }
+    const hidden = game.log.length - visibleLog(game).length;
+    expect(hidden).toBeGreaterThan(0);
+    expect(visibleLog(game).some((e) => e.tone === "score")).toBe(true);
+    expect(visibleLog(game).some((e) => e.tone === "bid")).toBe(true);
+  });
+});
+
+describe("правка протокола", () => {
+  const played = () => {
+    let game = createGame({ seed: 9, dealer: 0 });
+    while (game.results.length < 4) game = stepAutomatically(game);
+    return game;
+  };
+
+  it("пересчитывает очки раздачи и итог", () => {
+    const game = played();
+    const before = settlement(game).total[1];
+    const result = game.results[0];
+    const edited = applyAction(game, {
+      type: "edit-result",
+      handIndex: 0,
+      player: 1,
+      bid: 1,
+      tricks: 1,
+    });
+    expect(edited.results[0].bids[1]).toBe(1);
+    expect(edited.results[0].tricks[1]).toBe(1);
+    expect(edited.results[0].points[1]).toBe(10);
+    expect(settlement(edited).total[1]).toBe(before - result.points[1] + 10);
+    expect(edited.log.at(-1)?.text).toMatch(/Хозяин поправил протокол/);
+  });
+
+  it("пересчитывает уже начисленную премию", () => {
+    let game = createGame({ seed: 9, dealer: 0 });
+    while (game.premiums.length === 0) game = stepAutomatically(game);
+    const row = SCHEDULE.find((r) => r.type === "premium" && r.row === 5)!;
+    const handIndices = row.type === "premium" ? row.blockHandIndices : [];
+    let edited = game;
+    for (const handIndex of handIndices) {
+      edited = applyAction(edited, {
+        type: "edit-result",
+        handIndex,
+        player: 3,
+        bid: 1,
+        tricks: 1,
+      });
+    }
+    expect(edited.premiums[0].points[3]).toBe(20);
+    edited = applyAction(edited, {
+      type: "edit-result",
+      handIndex: handIndices[0],
+      player: 3,
+      tricks: 0,
+    });
+    expect(edited.premiums[0].points[3]).toBe(0);
+  });
+
+  it("не принимает правку несыгранной раздачи и абсурдных значений", () => {
+    const game = played();
+    expect(() =>
+      applyAction(game, {
+        type: "edit-result",
+        handIndex: 30,
+        player: 0,
+        tricks: 1,
+      }),
+    ).toThrow(/не сыграна/);
+    expect(() =>
+      applyAction(game, {
+        type: "edit-result",
+        handIndex: 0,
+        player: 0,
+        tricks: 99,
+      }),
+    ).toThrow(/Некорректное/);
   });
 });

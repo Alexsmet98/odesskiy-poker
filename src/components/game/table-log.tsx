@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { visibleLog } from "@/lib/game/log";
 import type { GameState } from "@/lib/game/types";
 
 const TONE: Record<string, string> = {
@@ -19,6 +20,7 @@ export function TableLog({ state }: { state: GameState }) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
   const [hasUnread, setHasUnread] = useState(false);
+  const entries = visibleLog(state);
 
   const scrollToBottom = useCallback(() => {
     const el = scroller.current;
@@ -44,7 +46,7 @@ export function TableLog({ state }: { state: GameState }) {
     } else {
       setHasUnread(true);
     }
-  }, [state.log.length]);
+  }, [state.log.length, entries.length]);
 
   return (
     <div className="relative flex h-72 flex-col rounded-lg border border-white/10 bg-black/50 backdrop-blur lg:sticky lg:top-4 lg:h-[min(32rem,calc(100dvh-2rem))]">
@@ -59,7 +61,7 @@ export function TableLog({ state }: { state: GameState }) {
         className="log-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2"
       >
         <ul className="space-y-1 text-xs">
-          {state.log.map((entry) => (
+          {entries.map((entry) => (
             <li key={entry.id} className={cn("leading-snug", TONE[entry.tone])}>
               <span className="mr-1.5 font-mono text-[10px] text-white/25">
                 {entry.row}

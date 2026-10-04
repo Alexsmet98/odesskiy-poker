@@ -2,6 +2,7 @@ import {
   cardsOfSuit,
   highestOfSuit,
   isJoker,
+  lowestOfSuit,
   isSuitCard,
   type Card,
   type Suit,
@@ -99,6 +100,11 @@ export function playRequirement(trick: Trick | null): PlayRequirement {
   if (!ctx) return { kind: "none" };
   if (ctx.mode === "demand-highest")
     return { kind: "highest-of", suit: ctx.suit };
+  if (ctx.mode === "dump") {
+    return ctx.dumpTarget === "lowest"
+      ? { kind: "lowest-of", suit: ctx.suit }
+      : { kind: "highest-of", suit: ctx.suit };
+  }
   return { kind: "follow", suit: ctx.suit };
 }
 
@@ -117,6 +123,10 @@ export function legalPlays(hand: Card[], trick: Trick | null): Card[] {
   if (requirement.kind === "highest-of") {
     const highest = highestOfSuit(hand, requirement.suit) as SuitCard;
     return [highest, ...jokers];
+  }
+  if (requirement.kind === "lowest-of") {
+    const lowest = lowestOfSuit(hand, requirement.suit) as SuitCard;
+    return [lowest, ...jokers];
   }
   return [...sameSuit, ...jokers];
 }
@@ -162,7 +172,8 @@ function extremeOfSuit(
  * Взятку забирает старшая карта масти хода, с поправками на джокеров:
  * — джокер «наисильнейший козырь» забирает взятку (если заявлены оба джокера, чёрный всегда сильнее красного;
  *   заход чёрным джокером в любом режиме красный не перебивает);
- * — джокер «самая младшая карта» никогда не берёт;
+ * — джокер «самая младшая карта» никогда не берёт, кроме сливов «заберёт младшая»:
+ *   там он и есть самая младшая карта и взятку забирает (если таких два, младше красный);
  * — при заходе джокером «младший», «по самым большим» и «слив» взятку забирает
  *   соответствующая карта названной масти, а если такой масти никто не положил —
  *   взятка остаётся у игрока с джокером.
@@ -170,6 +181,27 @@ function extremeOfSuit(
 export function resolveTrick(trick: Trick): PlayerId {
   const ctx = trickContext(trick);
   if (!ctx) throw new Error("Нельзя определить взявшего: во взятке нет карт");
+
+  const lowestWins = ctx.mode === "dump" && ctx.dumpTarget === "lowest";
+
+  if (lowestWins) {
+    // «Заберёт младшая»: джокер, положенный младшей картой, младше любой масти,
+    // а «наисильнейший козырь» здесь, наоборот, самая старшая карта и не берёт.
+    const lowJokers = trick.plays.filter(
+      (p) =>
+        isJoker(p.card) &&
+        p.declaration?.kind === "response" &&
+        p.declaration.mode === "low",
+    );
+    if (lowJokers.length > 0) {
+      const red = lowJokers.find(
+        (p) => isJoker(p.card) && p.card.color === "red",
+      );
+      return (red ?? lowJokers[0]).player;
+    }
+    const winner = extremeOfSuit(trick.plays, ctx.suit, "lowest");
+    return winner ? winner.player : ctx.leadPlay.player;
+  }
 
   // Заход чёрным джокером нельзя перебить красным, объявленным старшим в ответ.
   const blackLed =
@@ -184,9 +216,7 @@ export function resolveTrick(trick: Trick): PlayerId {
     return (black ?? highestClaims[0]).player;
   }
 
-  const target =
-    ctx.mode === "dump" ? (ctx.dumpTarget ?? "highest") : "highest";
-  const winner = extremeOfSuit(trick.plays, ctx.suit, target);
+  const winner = extremeOfSuit(trick.plays, ctx.suit, "highest");
   return winner ? winner.player : ctx.leadPlay.player;
 }
 

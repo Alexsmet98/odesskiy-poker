@@ -6,7 +6,7 @@ import {
 } from "@/lib/net/http";
 import { LobbyError } from "@/lib/net/lobby";
 import { SUITS } from "@/lib/game/cards";
-import type { JokerDeclaration } from "@/lib/game/types";
+import type { JokerDeclaration, PlayerId } from "@/lib/game/types";
 import type { NetAction } from "@/lib/net/protocol";
 import { lobbyManager } from "@/lib/net/registry";
 
@@ -62,6 +62,24 @@ function parseAction(raw: unknown): NetAction {
       if (typeof action.rowIndex !== "number")
         throw new LobbyError("Нет строки", 400);
       return { type: "next-row", rowIndex: action.rowIndex };
+    case "edit-result": {
+      const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+      if (
+        typeof action.handIndex !== "number" ||
+        typeof action.player !== "number" ||
+        ![0, 1, 2, 3].includes(action.player)
+      ) {
+        throw new LobbyError("Не указана строка протокола", 400);
+      }
+      return {
+        type: "edit-result",
+        handIndex: action.handIndex,
+        player: action.player as PlayerId,
+        bid: num(action.bid),
+        tricks: num(action.tricks),
+        jokers: num(action.jokers),
+      };
+    }
     default:
       throw new LobbyError("Неизвестное действие", 400);
   }

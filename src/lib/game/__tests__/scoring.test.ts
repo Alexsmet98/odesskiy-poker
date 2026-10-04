@@ -4,6 +4,7 @@ import {
   buildScoreboard,
   handPoints,
   premiumForBlock,
+  premiumRace,
   premiumRowResult,
   scoreHandForPlayer,
   settle,
@@ -37,7 +38,7 @@ describe("очки за раздачу", () => {
     expect(scoreHandForPlayer("nabory", null, 5)).toBe(0);
     expect(scoreHandForPlayer("slivy", null, 3)).toBe(0);
     expect(scoreHandForPlayer("normal", 2, 2)).toBe(20);
-    expect(scoreHandForPlayer("dark", 2, 1)).toBe(-10);
+    expect(scoreHandForPlayer("dark", 2, 1)).toBe(-20);
   });
 });
 
@@ -89,6 +90,88 @@ describe("премия", () => {
     const premium = premiumRowResult(row, results);
     // Игрок 2 весь блок пасовал и все пасы выполнил — 2 × 5.
     expect(premium.points).toEqual([80, 0, 10, 0]);
+  });
+});
+
+describe("тёмные: удвоенные очки и удвоенная премия", () => {
+  it("удваивает очки за точный заказ, перебор и недобор", () => {
+    expect(scoreHandForPlayer("dark", 4, 4)).toBe(80);
+    expect(scoreHandForPlayer("dark", 0, 0)).toBe(10);
+    expect(scoreHandForPlayer("dark", 1, 3)).toBe(6);
+    expect(scoreHandForPlayer("dark", 3, 1)).toBe(-40);
+  });
+
+  it("премия за тёмные вдвое больше обычной: заказ 4 → 160", () => {
+    expect(premiumForBlock([1, 2, 3, 4], [1, 2, 3, 4], 2).points).toBe(160);
+    expect(premiumForBlock([0, 0, 0, 0], [0, 0, 0, 0], 2).points).toBe(20);
+  });
+
+  it("строка премии за блок тёмных считается с удвоением", () => {
+    const results: HandResult[] = [24, 25, 26, 27].map((handIndex, i) => ({
+      handIndex,
+      kind: "dark" as const,
+      cards: 9,
+      dealer: 0 as PlayerId,
+      bids: [i + 1, 0, 0, 0],
+      jokers: [0, 0, 0, 0],
+      tricks: [i + 1, 0, 0, 1],
+      points: [0, 0, 0, 0],
+    }));
+    const row = PREMIUM_ROWS.find((r) => r.blockHandIndices[0] === 24)!;
+    expect(premiumRowResult(row, results).points).toEqual([160, 20, 20, 0]);
+  });
+});
+
+describe("гонка за премией", () => {
+  const hand = (
+    handIndex: number,
+    bids: number[],
+    tricks: number[],
+  ): HandResult => ({
+    handIndex,
+    kind: "normal",
+    cards: handIndex + 1,
+    dealer: 0,
+    bids,
+    tricks,
+    jokers: [0, 0, 0, 0],
+    points: [0, 0, 0, 0],
+  });
+
+  it("до первой раздачи блока в гонке все", () => {
+    const race = premiumRace([0, 1, 2, 3], []);
+    expect(race.every((entry) => entry.alive)).toBe(true);
+  });
+
+  it("выбывает тот, кто хоть раз ошибся в заказе, остальные остаются", () => {
+    const race = premiumRace(
+      [0, 1, 2, 3],
+      [
+        hand(0, [1, 0, 1, 0], [1, 0, 0, 0]),
+        hand(1, [1, 1, 1, 0], [1, 1, 1, 1]),
+      ],
+    );
+    expect(race.map((entry) => entry.alive)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(race[0]).toEqual({ alive: true, played: 2, exact: 2 });
+    expect(race[2]).toMatchObject({ played: 2, exact: 1 });
+  });
+
+  it("показывается в строке «Пр» ближайшего блока, но не у дальних блоков", () => {
+    const rows = buildScoreboard([hand(0, [1, 0, 0, 0], [1, 1, 0, 0])], []);
+    const premiumRows = rows.filter((r) => r.type === "premium");
+    expect(premiumRows[0].race?.map((e) => e.alive)).toEqual([
+      true,
+      false,
+      true,
+      true,
+    ]);
+    expect(premiumRows[0].blockSize).toBe(4);
+    expect(premiumRows[1].race).toBeUndefined();
   });
 });
 

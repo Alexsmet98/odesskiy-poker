@@ -202,7 +202,14 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
     return { card: highestCard(safe), declaration: null };
   }
   if (jokers.length > 0) {
-    return { card: jokers[0], declaration: { kind: "response", mode: "low" } };
+    const low: JokerDeclaration = { kind: "response", mode: "low" };
+    const high: JokerDeclaration = { kind: "response", mode: "high" };
+    const declaration = !leadsTrickNow(trick, player, jokers[0], low)
+      ? low
+      : !leadsTrickNow(trick, player, jokers[0], high)
+        ? high
+        : low;
+    return { card: jokers[0], declaration };
   }
   return { card: lowestCard(nonJokers), declaration: null };
 }

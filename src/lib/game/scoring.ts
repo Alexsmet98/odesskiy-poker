@@ -13,16 +13,29 @@ export const PENALTY_PER_MISSING_TRICK = 10;
 export const NS_POINTS_PER_TRICK = 20;
 /** Премия удваивает очки за раздачу с самым большим заказом в блоке. */
 export const PREMIUM_MULTIPLIER = 2;
+/** Тёмные, как наборы и сливы, идут с удвоенными очками; премия за них удваивается ещё раз. */
+export const DARK_MULTIPLIER = 2;
 
-/** Очки за раздачу по обычной шкале (без учёта премии). */
-export function handPoints(bid: number, tricks: number): number {
+/** Множитель очков за раздачи данного типа. */
+export function kindMultiplier(kind: HandKind): number {
+  return kind === "dark" ? DARK_MULTIPLIER : 1;
+}
+
+/** Очки за раздачу по обычной шкале (без учёта премии); `multiplier` — для тёмных. */
+export function handPoints(
+  bid: number,
+  tricks: number,
+  multiplier = 1,
+): number {
+  let points: number;
   if (tricks === bid) {
-    return bid === 0 ? PASS_POINTS : bid * POINTS_PER_ORDERED_TRICK;
+    points = bid === 0 ? PASS_POINTS : bid * POINTS_PER_ORDERED_TRICK;
+  } else if (tricks > bid) {
+    points = tricks * POINTS_PER_TRICK_OVERBID;
+  } else {
+    points = -(bid - tricks) * PENALTY_PER_MISSING_TRICK;
   }
-  if (tricks > bid) {
-    return tricks * POINTS_PER_TRICK_OVERBID;
-  }
-  return -(bid - tricks) * PENALTY_PER_MISSING_TRICK;
+  return points * multiplier;
 }
 
 /**
@@ -36,7 +49,7 @@ export function scoreHandForPlayer(
 ): number {
   if (kind === "nabory" || kind === "slivy") return 0;
   if (bid === null) return 0;
-  return handPoints(bid, tricks);
+  return handPoints(bid, tricks, kindMultiplier(kind));
 }
 
 export type PremiumAward = {
@@ -51,10 +64,12 @@ export type PremiumAward = {
  * Премия начисляется игроку, который в каждой раздаче блока взял ровно свой заказ.
  * Размер: очки за раздачу с самым большим заказом, удвоенные и начисленные целиком
  * (заказ 4 → 2 × 40 = 80; блок из одних выполненных пасов → 2 × 5 = 10).
+ * В блоке тёмных очки за раздачу уже удвоены, поэтому премия вдвое больше (заказ 4 → 160).
  */
 export function premiumForBlock(
   bids: (number | null)[],
   tricks: number[],
+  multiplier = 1,
 ): PremiumAward {
   if (bids.length === 0 || bids.length !== tricks.length) {
     return { qualified: false, largestBid: null, points: 0 };
@@ -68,7 +83,11 @@ export function premiumForBlock(
   );
   const base =
     largestBid === 0 ? PASS_POINTS : largestBid * POINTS_PER_ORDERED_TRICK;
-  return { qualified: true, largestBid, points: base * PREMIUM_MULTIPLIER };
+  return {
+    qualified: true,
+    largestBid,
+    points: base * multiplier * PREMIUM_MULTIPLIER,
+  };
 }
 
 export function premiumRowResult(
@@ -79,14 +98,46 @@ export function premiumRowResult(
     .map((handIndex) => results.find((r) => r.handIndex === handIndex))
     .filter((r): r is HandResult => r !== undefined);
 
+  const blockMultiplier = Math.max(
+    1,
+    ...blockResults.map((r) => kindMultiplier(r.kind)),
+  );
   const points = PLAYER_IDS.map((playerId) => {
     if (blockResults.length !== row.blockHandIndices.length) return 0;
     const bids = blockResults.map((r) => r.bids[playerId]);
     const tricks = blockResults.map((r) => r.tricks[playerId]);
-    return premiumForBlock(bids, tricks).points;
+    return premiumForBlock(bids, tricks, blockMultiplier).points;
   });
 
   return { row: row.row, blockHandIndices: row.blockHandIndices, points };
+}
+
+export type PremiumRaceEntry = {
+  /** Остаётся ли игрок в гонке за премией блока: все сыгранные раздачи блока взяты ровно в заказ. */
+  alive: boolean;
+  /** Сколько раздач блока уже сыграно и сколько из них взято точно. */
+  played: number;
+  exact: number;
+};
+
+/** Кто ещё может получить премию за блок: пока в каждой сыгранной раздаче заказ взят точно. */
+export function premiumRace(
+  blockHandIndices: number[],
+  results: HandResult[],
+): PremiumRaceEntry[] {
+  const blockResults = blockHandIndices
+    .map((handIndex) => results.find((r) => r.handIndex === handIndex))
+    .filter((r): r is HandResult => r !== undefined);
+  return PLAYER_IDS.map((p) => {
+    const exact = blockResults.filter(
+      (r) => r.bids[p] !== null && r.bids[p] === r.tricks[p],
+    ).length;
+    return {
+      alive: exact === blockResults.length,
+      played: blockResults.length,
+      exact,
+    };
+  });
 }
 
 export type Settlement = {
@@ -158,6 +209,10 @@ export type ScoreboardRow = {
   handIndex: number | null;
   played: boolean;
   cells: ScoreboardCell[];
+  /** Для ещё не закрытой строки «Пр» ближайшего блока: кто остался в гонке за премией. */
+  race?: PremiumRaceEntry[];
+  /** Сколько раздач блока уже сыграно (для подписи гонки) и сколько всего. */
+  blockSize?: number;
 };
 
 const EMPTY_CELL: ScoreboardCell = {
@@ -176,6 +231,7 @@ export function buildScoreboard(
 ): ScoreboardRow[] {
   const running = PLAYER_IDS.map(() => 0);
   const rows: ScoreboardRow[] = [];
+  let raceShown = false;
 
   for (const scheduleRow of SCHEDULE) {
     if (scheduleRow.type === "hand") {
@@ -216,6 +272,8 @@ export function buildScoreboard(
     } else {
       const premium = premiums.find((pr) => pr.row === scheduleRow.row);
       if (!premium) {
+        const showRace = !raceShown;
+        raceShown = true;
         rows.push({
           row: scheduleRow.row,
           label: scheduleRow.label,
@@ -224,6 +282,12 @@ export function buildScoreboard(
           handIndex: null,
           played: false,
           cells: PLAYER_IDS.map(() => EMPTY_CELL),
+          ...(showRace
+            ? {
+                race: premiumRace(scheduleRow.blockHandIndices, results),
+                blockSize: scheduleRow.blockHandIndices.length,
+              }
+            : {}),
         });
         continue;
       }

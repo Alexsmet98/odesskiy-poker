@@ -19,6 +19,7 @@ import {
   trickTurn,
 } from "./rules";
 import {
+  handRow,
   hasBidding,
   isBlindBidding,
   SCHEDULE,
@@ -41,6 +42,7 @@ import {
   type LogEntry,
   type Player,
   type PlayerId,
+  type ResultEdit,
   type Trick,
 } from "./types";
 
@@ -100,6 +102,7 @@ function pushLog(
   state: GameState,
   text: string,
   tone: LogEntry["tone"] = "neutral",
+  trick?: number,
 ): void {
   state.logCounter += 1;
   state.log.push({
@@ -107,6 +110,7 @@ function pushLog(
     row: currentRow(state).row,
     text,
     tone,
+    ...(trick !== undefined ? { trick } : {}),
   });
   if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
 }
@@ -417,12 +421,14 @@ function applyPlay(
       state,
       declarationText(state, player, finalDeclaration, inHand),
       "joker",
+      state.trickNumber,
     );
   } else {
     pushLog(
       state,
       `${state.players[player].name}: ${cardLabel(inHand)}.`,
       "trick",
+      state.trickNumber,
     );
   }
 
@@ -440,6 +446,7 @@ function applyPlay(
     state,
     `Взятка ${state.trickNumber} — ${state.players[winner].name}.`,
     "trick",
+    state.trickNumber,
   );
 }
 
@@ -491,6 +498,46 @@ function applyNextRow(state: GameState): void {
   startRow(state);
 }
 
+function applyEditResult(state: GameState, edit: ResultEdit): void {
+  const result = state.results.find((r) => r.handIndex === edit.handIndex);
+  if (!result) throw new Error("Эта раздача ещё не сыграна");
+  const player = edit.player;
+  if (!PLAYER_IDS.includes(player)) throw new Error("Нет такого игрока");
+  const check = (value: number | undefined, max: number, what: string) => {
+    if (value === undefined) return;
+    if (!Number.isInteger(value) || value < 0 || value > max) {
+      throw new Error(`Некорректное значение: ${what}`);
+    }
+  };
+  check(edit.bid, result.cards, "заказ");
+  check(edit.tricks, result.cards, "взятки");
+  check(edit.jokers, 2, "джокеры");
+
+  if (edit.bid !== undefined) {
+    if (!hasBidding(result.kind)) {
+      throw new Error("В этой раздаче заказов нет");
+    }
+    result.bids[player] = edit.bid;
+  }
+  if (edit.tricks !== undefined) result.tricks[player] = edit.tricks;
+  if (edit.jokers !== undefined) result.jokers[player] = edit.jokers;
+
+  result.points = PLAYER_IDS.map((p) =>
+    scoreHandForPlayer(result.kind, result.bids[p], result.tricks[p]),
+  );
+  state.premiums = state.premiums.map((premium) => {
+    const row = SCHEDULE.find((r) => r.row === premium.row);
+    return row && row.type === "premium"
+      ? premiumRowResult(row, state.results)
+      : premium;
+  });
+  pushLog(
+    state,
+    `Хозяин поправил протокол: ${state.players[player].name}, строка ${handRow(result.handIndex).label}.`,
+    "score",
+  );
+}
+
 export function applyAction(state: GameState, action: GameAction): GameState {
   const next = cloneState(state);
   switch (action.type) {
@@ -505,6 +552,9 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       break;
     case "next-row":
       applyNextRow(next);
+      break;
+    case "edit-result":
+      applyEditResult(next, action);
       break;
   }
   return next;

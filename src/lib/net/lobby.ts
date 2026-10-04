@@ -246,11 +246,28 @@ export class LobbyManager {
           }
           next = applyAction(game, { type: "next-row" });
           break;
+        case "edit-result":
+          if (seat !== lobby.hostSeat) {
+            throw new LobbyError(
+              "Править протокол может только хозяин лобби",
+              403,
+            );
+          }
+          next = applyAction(game, {
+            type: "edit-result",
+            handIndex: action.handIndex,
+            player: action.player,
+            bid: action.bid,
+            tricks: action.tricks,
+            jokers: action.jokers,
+          });
+          break;
         default:
           throw new Error("Неизвестное действие");
       }
       lobby.game = next;
     } catch (e) {
+      if (isLobbyError(e)) throw e;
       throw new LobbyError(
         e instanceof Error ? e.message : "Непонятный ход",
         400,

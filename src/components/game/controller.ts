@@ -7,7 +7,12 @@ import {
   settlement,
 } from "@/lib/game/engine";
 import { legalPlays } from "@/lib/game/rules";
-import type { GameState, JokerDeclaration, PlayerId } from "@/lib/game/types";
+import type {
+  GameState,
+  JokerDeclaration,
+  PlayerId,
+  ResultEdit,
+} from "@/lib/game/types";
 
 /** Всё, что нужно столу от источника партии: локального движка или сетевого лобби. */
 export type GameController = {
@@ -25,6 +30,8 @@ export type GameController = {
   placeBid: (value: number) => void;
   playCard: (card: Card, declaration?: JokerDeclaration | null) => void;
   nextRow: () => void;
+  /** Правка протокола доступна хозяину сетевого лобби. */
+  editResult?: (edit: ResultEdit) => void;
   /** Кнопка в шапке: в одиночной игре «Заново», в сети — выход из-за стола. */
   exitLabel: string;
   /** Кнопка после окончания партии. */

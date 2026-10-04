@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { isJoker, type Card } from "@/lib/game/cards";
+import { trickContext } from "@/lib/game/rules";
 import { SCHEDULE } from "@/lib/game/schedule";
 import type { JokerDeclaration, PlayerId } from "@/lib/game/types";
 import { ActionPanel } from "./action-panel";
@@ -36,6 +37,7 @@ export function GameTableView({
   );
   const [pendingJoker, setPendingJoker] = useState<Card | null>(null);
   const [protocolOpen, setProtocolOpen] = useState(false);
+  const [lastTrickOpen, setLastTrickOpen] = useState(false);
 
   const hand = state.hands[human];
   const legalIds = new Set(game.humanLegalCards.map((c) => c.id));
@@ -105,12 +107,37 @@ export function GameTableView({
           <Button
             variant="secondary"
             size="sm"
+            disabled={state.lastTrick === null}
+            onClick={() => setLastTrickOpen(true)}
+          >
+            Последняя взятка
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setProtocolOpen(true)}
           >
             Протокол
           </Button>
+          <Dialog open={lastTrickOpen} onOpenChange={setLastTrickOpen}>
+            <DialogContent className="border-ember/30 bg-card sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-xl tracking-wide">
+                  Последняя взятка
+                </DialogTitle>
+                <DialogDescription>
+                  Смотреть можно только её — старые взятки уже не вернуть.
+                </DialogDescription>
+              </DialogHeader>
+              <TableCenter
+                state={state}
+                trick={state.lastTrick}
+                title="Последняя взятка"
+              />
+            </DialogContent>
+          </Dialog>
           <Dialog open={protocolOpen} onOpenChange={setProtocolOpen}>
-            <DialogContent className="max-h-[90dvh] max-w-5xl overflow-y-auto border-ember/30 bg-card">
+            <DialogContent className="max-h-[90dvh] overflow-y-auto border-ember/30 bg-card sm:max-w-5xl">
               <DialogHeader>
                 <DialogTitle className="font-heading text-xl tracking-wide">
                   Протокол партии
@@ -124,6 +151,7 @@ export function GameTableView({
                 state={state}
                 settlement={game.settlement}
                 currentRow={game.row.row}
+                onEdit={game.editResult}
               />
             </DialogContent>
           </Dialog>
@@ -232,6 +260,11 @@ export function GameTableView({
       <JokerDialog
         open={pendingJoker !== null}
         isLead={isLead}
+        lowJokerWins={
+          state.currentTrick !== null &&
+          state.currentTrick.plays.length > 0 &&
+          trickContext(state.currentTrick)?.dumpTarget === "lowest"
+        }
         onCancel={() => setPendingJoker(null)}
         onConfirm={onJokerConfirm}
       />

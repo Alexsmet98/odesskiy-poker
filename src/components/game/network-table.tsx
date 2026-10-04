@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import type { Card } from "@/lib/game/cards";
-import type { JokerDeclaration } from "@/lib/game/types";
+import type { JokerDeclaration, ResultEdit } from "@/lib/game/types";
 import { lobbyApi } from "@/lib/net/client";
 import type { ServerEvent } from "@/lib/net/protocol";
 import { clearSession, type Session } from "@/lib/net/session";
@@ -63,11 +63,15 @@ export function NetworkTable({
       playCard: (card: Card, declaration: JokerDeclaration | null = null) =>
         send({ type: "play", cardId: card.id, declaration }),
       nextRow: () => send({ type: "next-row", rowIndex: game.rowIndex }),
+      editResult:
+        event.lobby.mySeat === event.lobby.hostSeat
+          ? (edit: ResultEdit) => send({ type: "edit-result", ...edit })
+          : undefined,
       exitLabel: "Выйти",
       finishLabel: "В меню",
       exit,
     }),
-    [error, event.lobby.mySeat, exit, game, send],
+    [error, event.lobby.hostSeat, event.lobby.mySeat, exit, game, send],
   );
 
   const offline = event.lobby.seats.filter(

@@ -1,4 +1,9 @@
-import type { GameState, JokerDeclaration, PlayerId } from "@/lib/game/types";
+import type {
+  GameState,
+  JokerDeclaration,
+  PlayerId,
+  ResultEdit,
+} from "@/lib/game/types";
 
 export const LOBBY_CODE_LENGTH = 4;
 export const MAX_NAME_LENGTH = 20;
@@ -30,7 +35,9 @@ export type NetAction =
   | { type: "bid"; value: number }
   | { type: "play"; cardId: string; declaration: JokerDeclaration | null }
   /** rowIndex защищает от двойного перехода, если «Дальше» нажали сразу двое. */
-  | { type: "next-row"; rowIndex: number };
+  | { type: "next-row"; rowIndex: number }
+  /** Правка протокола — только у хозяина лобби. */
+  | ({ type: "edit-result" } & ResultEdit);
 
 export type LobbyInfo = {
   code: string;

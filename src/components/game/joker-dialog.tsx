@@ -54,11 +54,14 @@ const LEAD_MODES: { mode: LeadMode; title: string; hint: string }[] = [
 export function JokerDialog({
   open,
   isLead,
+  lowJokerWins = false,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
   isLead: boolean;
+  /** Слив «заберёт младшая»: джокер младшей картой забирает взятку. */
+  lowJokerWins?: boolean;
   onCancel: () => void;
   onConfirm: (declaration: JokerDeclaration) => void;
 }) {
@@ -186,7 +189,9 @@ export function JokerDialog({
                 Самая младшая карта
               </span>
               <span className="block text-xs text-muted-foreground">
-                Слабее шестёрки любой масти — взятку не беру.
+                {lowJokerWins
+                  ? "Слив «заберёт младшая»: младший джокер — самая младшая карта, взятка будет ваша."
+                  : "Слабее шестёрки любой масти — взятку не беру."}
               </span>
             </button>
             <div className="flex justify-end">
