@@ -110,6 +110,11 @@ export function settle(results: HandResult[], premiums: PremiumResult[]): Settle
   return { regularPoints, on, os, sumNs, pointsNs, total };
 }
 
+/** Сколько джокеров побывало на руках у каждого игрока за все сыгранные раздачи. */
+export function totalJokers(results: HandResult[]): number[] {
+  return PLAYER_IDS.map((p) => results.reduce((sum, r) => sum + (r.jokers[p] ?? 0), 0));
+}
+
 export type ScoreboardCell = {
   /** Заказ, показываемый в левой колонке игрока. */
   bid: number | null;

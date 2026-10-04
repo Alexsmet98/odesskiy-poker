@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
-import { buildScoreboard, type Settlement } from "@/lib/game/scoring";
+import { buildScoreboard, totalJokers, type Settlement } from "@/lib/game/scoring";
 import { PLAYER_IDS, type GameState } from "@/lib/game/types";
 
 function jokerTitle(jokers: number): string | undefined {
@@ -121,6 +121,11 @@ export function Scoreboard({
           <SummaryRow label="Сум НС" values={settlement.sumNs} hint="ОН − ОС" signed />
           <SummaryRow label="Очки НС" values={settlement.pointsNs} hint="Сум НС × 20" signed />
           <SummaryRow label="Итого" values={settlement.total} strong signed />
+          <SummaryRow
+            label="Джокеры"
+            values={totalJokers(state.results)}
+            hint="Сколько джокеров было на руках за всю игру"
+          />
         </tbody>
       </table>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-black/20 bg-black/[0.04] px-3 py-2 text-[11px] text-black/70">

@@ -7,6 +7,7 @@ import {
   premiumRowResult,
   scoreHandForPlayer,
   settle,
+  totalJokers,
 } from "../scoring";
 import type { HandResult, PlayerId, PremiumResult } from "../types";
 
@@ -100,7 +101,12 @@ describe("зачёт наборов и сливов", () => {
       dealer: 0 as PlayerId,
       bids: [null, null, null, null],
       jokers: [0, 0, 0, 0],
-      tricks: [[2, 0, 1, 3][i], [5, 0, 6, 0][i], [0, 2, 1, 5][i], [2, 6, 1, 2][i]],
+      tricks: [
+        [2, 0, 1, 3][i],
+        [5, 0, 6, 0][i],
+        [0, 2, 1, 5][i],
+        [2, 6, 1, 2][i],
+      ],
       points: [0, 0, 0, 0],
     })),
     ...[0, 1, 2, 3].map((i) => ({
@@ -110,7 +116,12 @@ describe("зачёт наборов и сливов", () => {
       dealer: 0 as PlayerId,
       bids: [null, null, null, null],
       jokers: [0, 0, 0, 0],
-      tricks: [[5, 3, 1, 1][i], [2, 2, 2, 5][i], [2, 3, 3, 2][i], [0, 0, 4, 1][i]],
+      tricks: [
+        [5, 3, 1, 1][i],
+        [2, 2, 2, 5][i],
+        [2, 3, 3, 2][i],
+        [0, 0, 4, 1][i],
+      ],
       points: [0, 0, 0, 0],
     })),
   ];
@@ -159,10 +170,12 @@ describe("расписание партии", () => {
   it("идёт в порядке 1-2-3-4, 5-6-7-8, 9×4, 8-7-6-5, 4-3-2-1, 9×4, тёмные, наборы, сливы", () => {
     const hands = SCHEDULE.filter((r) => r.type === "hand");
     expect(hands.map((r) => (r.type === "hand" ? r.cards : 0))).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-      9, 9, 9, 9, 9,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 9, 9, 9, 9,
+      9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
     ]);
-    expect(hands.map((r) => (r.type === "hand" ? r.kind : null)).slice(24)).toEqual([
+    expect(
+      hands.map((r) => (r.type === "hand" ? r.kind : null)).slice(24),
+    ).toEqual([
       "dark",
       "dark",
       "dark",
@@ -209,9 +222,21 @@ describe("таблица протокола", () => {
     ];
     const rows = buildScoreboard(results, []);
     expect(rows).toHaveLength(43);
-    expect(rows[0].cells[0]).toMatchObject({ bid: 1, runningTotal: 10, exact: true });
-    expect(rows[1].cells[0]).toMatchObject({ bid: 2, runningTotal: 0, exact: false });
-    expect(rows[1].cells[2]).toMatchObject({ bid: 1, runningTotal: 15, exact: true });
+    expect(rows[0].cells[0]).toMatchObject({
+      bid: 1,
+      runningTotal: 10,
+      exact: true,
+    });
+    expect(rows[1].cells[0]).toMatchObject({
+      bid: 2,
+      runningTotal: 0,
+      exact: false,
+    });
+    expect(rows[1].cells[2]).toMatchObject({
+      bid: 1,
+      runningTotal: 15,
+      exact: true,
+    });
     expect(rows[2].played).toBe(false);
   });
 
@@ -230,6 +255,32 @@ describe("таблица протокола", () => {
     ];
     const rows = buildScoreboard(results, []);
     const naboryRow = rows.find((r) => r.handIndex === 28);
-    expect(naboryRow?.cells[0]).toMatchObject({ tricks: 3, runningTotal: null });
+    expect(naboryRow?.cells[0]).toMatchObject({
+      tricks: 3,
+      runningTotal: null,
+    });
+  });
+});
+
+describe("джокеры за партию", () => {
+  it("суммирует джокеры игрока по всем сыгранным раздачам", () => {
+    const hand = (handIndex: number, jokers: number[]): HandResult => ({
+      handIndex,
+      kind: "normal",
+      cards: 5,
+      dealer: 0,
+      bids: [0, 0, 0, 0],
+      jokers,
+      tricks: [0, 0, 0, 0],
+      points: [0, 0, 0, 0],
+    });
+    expect(
+      totalJokers([
+        hand(0, [1, 0, 2, 0]),
+        hand(1, [0, 0, 1, 1]),
+        hand(2, [2, 0, 0, 0]),
+      ]),
+    ).toEqual([3, 0, 3, 1]);
+    expect(totalJokers([])).toEqual([0, 0, 0, 0]);
   });
 });
