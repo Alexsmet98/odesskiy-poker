@@ -4,8 +4,9 @@ import type { JokerDeclaration, Play, PlayerId, Trick } from "../types";
 export const c = (suit: Suit, rank: Rank) => makeCard(suit, rank);
 export const joker = (index: 0 | 1 = 0): Card => ({
   kind: "joker",
-  id: `joker-${index}`,
+  id: index === 0 ? "joker-red" : "joker-black",
   index,
+  color: index === 0 ? "red" : "black",
 });
 
 export function play(

@@ -37,20 +37,27 @@ export function PlayingCard({
       className={cn(
         "relative flex select-none flex-col justify-between overflow-hidden border border-black/25 p-1.5 font-semibold",
         SIZES[size],
-        joker ? "joker-face text-amber-200" : "card-face",
+        isJoker(card) ? (card.color === "red" ? "joker-face joker-red" : "joker-face joker-black") : "card-face",
         !joker && SUIT_IS_RED[card.suit] ? "text-red-800" : !joker && "text-zinc-900",
         dimmed && "opacity-45 saturate-50",
         highlighted && "ring-2 ring-ember shadow-[0_0_24px_-4px_var(--ember)]",
         className,
       )}
     >
-      {joker ? (
+      {isJoker(card) ? (
         <>
-          <span className="leading-none tracking-wider">J</span>
-          <span className="absolute inset-0 flex items-center justify-center text-2xl drop-shadow">
+          <span className="leading-none tracking-wider">{card.color === "red" ? "К" : "Ч"}</span>
+          <span
+            className={cn(
+              "absolute inset-0 flex items-center justify-center text-2xl drop-shadow",
+              card.color === "black" && "grayscale brightness-75",
+            )}
+          >
             🃏
           </span>
-          <span className="self-end leading-none tracking-wider">J</span>
+          <span className="self-end leading-none tracking-wider">
+            {card.color === "red" ? "К" : "Ч"}
+          </span>
         </>
       ) : (
         <>

@@ -117,7 +117,7 @@ export function isLegalPlay(card: Card, hand: Card[], trick: Trick | null): bool
   return legalPlays(hand, trick).some((c) => c.id === card.id);
 }
 
-/** Джокер, объявленный наисильнейшим козырем, бьёт всё, что лежит на столе. */
+/** Джокер, объявленный наисильнейшим козырем, бьёт все обычные карты на столе. */
 function claimsHighest(play: Play): boolean {
   const d = play.declaration;
   if (!d) return false;
@@ -145,7 +145,7 @@ function extremeOfSuit(
 
 /**
  * Взятку забирает старшая карта масти хода, с поправками на джокеров:
- * — джокер «наисильнейший козырь» забирает взятку (при нескольких заявках побеждает последняя);
+ * — джокер «наисильнейший козырь» забирает взятку (если заявлены оба джокера, чёрный всегда сильнее красного);
  * — джокер «самая младшая карта» никогда не берёт;
  * — при заходе джокером «младший», «по самым большим» и «слив» взятку забирает
  *   соответствующая карта названной масти, а если такой масти никто не положил —
@@ -157,7 +157,8 @@ export function resolveTrick(trick: Trick): PlayerId {
 
   const highestClaims = trick.plays.filter(claimsHighest);
   if (highestClaims.length > 0) {
-    return highestClaims[highestClaims.length - 1].player;
+    const black = highestClaims.find((p) => isJoker(p.card) && p.card.color === "black");
+    return (black ?? highestClaims[0]).player;
   }
 
   const target = ctx.mode === "dump" ? (ctx.dumpTarget ?? "highest") : "highest";

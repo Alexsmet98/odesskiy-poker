@@ -223,20 +223,23 @@ function declarationText(
   state: GameState,
   player: PlayerId,
   declaration: JokerDeclaration,
+  card: Card,
 ): string {
   const name = state.players[player].name;
+  const joker = isJoker(card) && card.color === "black" ? "чёрным джокером" : "красным джокером";
+  const jokerAcc = isJoker(card) && card.color === "black" ? "чёрного джокера" : "красного джокера";
   if (declaration.kind === "response") {
     return declaration.mode === "high"
-      ? `${name} кладёт джокера наисильнейшим козырем.`
-      : `${name} кладёт джокера самой младшей картой.`;
+      ? `${name} кладёт ${jokerAcc} наисильнейшим козырем.`
+      : `${name} кладёт ${jokerAcc} самой младшей картой.`;
   }
   switch (declaration.mode) {
     case "lead-high":
-      return `${name} заходит джокером: ${SUIT_LABEL[declaration.suit]}, джокер старший.`;
+      return `${name} заходит ${joker}: ${SUIT_LABEL[declaration.suit]}, джокер старший.`;
     case "lead-low":
-      return `${name} заходит джокером: ${SUIT_LABEL[declaration.suit]}, джокер младший.`;
+      return `${name} заходит ${joker}: ${SUIT_LABEL[declaration.suit]}, джокер младший.`;
     case "demand-highest":
-      return `${name} заходит джокером: по самым большим ${SUIT_LABEL_ACCUSATIVE[declaration.suit]}.`;
+      return `${name} заходит ${joker}: по самым большим ${SUIT_LABEL_ACCUSATIVE[declaration.suit]}.`;
     case "dump":
       return declaration.target === "highest"
         ? `${name} сливает взятку: заберёт старшая карта (${SUIT_LABEL[declaration.suit]}).`
@@ -347,7 +350,7 @@ function applyPlay(
   trick.plays.push({ player, card: inHand, declaration: finalDeclaration });
 
   if (finalDeclaration) {
-    pushLog(state, declarationText(state, player, finalDeclaration), "joker");
+    pushLog(state, declarationText(state, player, finalDeclaration, inHand), "joker");
   } else {
     pushLog(state, `${state.players[player].name}: ${cardLabel(inHand)}.`, "trick");
   }

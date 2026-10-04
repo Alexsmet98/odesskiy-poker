@@ -24,6 +24,7 @@ describe("очки за раздачу", () => {
   it("даёт 1 за взятку при переборе", () => {
     expect(handPoints(0, 1)).toBe(1);
     expect(handPoints(2, 5)).toBe(5);
+    expect(handPoints(2, 4)).toBe(4);
   });
 
   it("снимает 10 за каждую недобранную взятку", () => {
