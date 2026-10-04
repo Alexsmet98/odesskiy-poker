@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { SUIT_LABEL, SUIT_LABEL_ACCUSATIVE, SUIT_SYMBOL } from "@/lib/game/cards";
 import { playRequirement, trickContext } from "@/lib/game/rules";
 import { HAND_KIND_LABEL } from "@/lib/game/schedule";
+import { tricksCount } from "@/lib/game/text";
 import type { GameController } from "./use-game";
 
 /** Подсказка, что именно сейчас обязан положить игрок. */
@@ -96,7 +97,7 @@ export function ActionPanel({ game }: { game: GameController }) {
                 <span className={cn(player.isHuman && "text-ember")}>{player.name}</span>
                 <span className="font-mono text-xs text-muted-foreground">
                   {isNs
-                    ? `${tricks} взяток в зачёт НС`
+                    ? `${tricksCount(tricks)} в зачёт НС`
                     : `заказ ${bid ?? "—"} / взял ${tricks}`}
                 </span>
                 {!isNs && (
@@ -214,7 +215,10 @@ export function ActionPanel({ game }: { game: GameController }) {
     const bid = state.bids[human] ?? 0;
     const taken = state.tricksWon[human];
     if (bid === 0) return `Вы пасовали. Взято ${taken} — пас держится, пока вы не берёте.`;
-    return `Ваш заказ ${bid}, взято ${taken}. Осталось набрать ${Math.max(0, bid - taken)}.`;
+    const left = Math.max(0, bid - taken);
+    return left === 0
+      ? `Ваш заказ ${bid}, взято ${taken} — заказ выполнен, лишние взятки его сломают.`
+      : `Ваш заказ ${bid}, взято ${taken}. Осталось набрать ${tricksCount(left)}.`;
   })();
 
   return (

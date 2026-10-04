@@ -26,6 +26,7 @@ import {
   type ScheduleRow,
 } from "./schedule";
 import { premiumRowResult, scoreHandForPlayer, settle, type Settlement } from "./scoring";
+import { tricksCount } from "./text";
 import {
   PLAYER_IDS,
   type GameAction,
@@ -263,7 +264,7 @@ function finishHand(state: GameState): void {
   for (const p of PLAYER_IDS) {
     const name = state.players[p].name;
     if (row.kind === "nabory" || row.kind === "slivy") {
-      pushLog(state, `${name}: ${state.tricksWon[p]} взяток в зачёт НС.`, "score");
+      pushLog(state, `${name}: ${tricksCount(state.tricksWon[p])} в зачёт НС.`, "score");
     } else {
       const bid = state.bids[p] ?? 0;
       const points = result.points[p];

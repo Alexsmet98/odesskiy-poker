@@ -107,8 +107,8 @@ function jokerLead(state: GameState, player: PlayerId, intent: Intent): JokerDec
   }
   const empty = voidSuit(hand);
   if (empty) {
-    // Своей масти нет — слив уйдёт тому, у кого она есть.
-    return { kind: "lead", mode: "dump", suit: empty, target: "highest" };
+    // Своей масти нет: требование «по самым большим» и вытягивает чужой козырь, и отдаёт взятку.
+    return { kind: "lead", mode: "demand-highest", suit: empty };
   }
   const weakest = SUITS.reduce((best, suit) => {
     const high = highestOfSuit(hand, suit);
@@ -117,7 +117,7 @@ function jokerLead(state: GameState, player: PlayerId, intent: Intent): JokerDec
     if (!bestHigh) return suit;
     return high.rank < bestHigh.rank ? suit : best;
   });
-  return { kind: "lead", mode: "lead-low", suit: weakest };
+  return { kind: "lead", mode: "dump", suit: weakest, target: "highest" };
 }
 
 export function chooseMove(state: GameState, player: PlayerId): AiMove {
@@ -137,6 +137,14 @@ export function chooseMove(state: GameState, player: PlayerId): AiMove {
     // Джокером заходим, только когда взятка нужна и других козырей не осталось.
     if (intent === "win" && jokers.length > 0 && nonJokers.every((c) => c.rank < 13)) {
       return { card: jokers[0], declaration: jokerLead(state, player, "win") };
+    }
+    // Взятка не нужна: в сливах и при одних больших картах джокером удобно отдать ход.
+    if (intent === "lose" && jokers.length > 0) {
+      const lowest = lowestCard(nonJokers);
+      const noSmallCards = !isSuitCard(lowest) || lowest.rank >= 11;
+      if (currentHandRow(state)?.kind === "slivy" || noSmallCards) {
+        return { card: jokers[0], declaration: jokerLead(state, player, "lose") };
+      }
     }
     const card = intent === "win" ? highestCard(nonJokers) : lowestCard(nonJokers);
     return { card, declaration: null };
