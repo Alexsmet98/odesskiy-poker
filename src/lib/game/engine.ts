@@ -26,7 +26,7 @@ import {
   type ScheduleRow,
 } from "./schedule";
 import { premiumRowResult, scoreHandForPlayer, settle, type Settlement } from "./scoring";
-import { tricksCount } from "./text";
+import { cardsAccusative, tricksCount } from "./text";
 import {
   PLAYER_IDS,
   type GameAction,
@@ -143,7 +143,7 @@ function startRow(state: GameState): void {
     state.turn = null;
     pushLog(
       state,
-      `Раздача на ${row.cards} карт. Сдаёт ${state.players[state.dealer].name}, торговля пошла.`,
+      `Раздача на ${cardsAccusative(row.cards)}. Сдаёт ${state.players[state.dealer].name}, торговля пошла.`,
       "neutral",
     );
   } else {

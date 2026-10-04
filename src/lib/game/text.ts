@@ -15,3 +15,8 @@ export function tricksWord(count: number): string {
 export function tricksCount(count: number): string {
   return `${count} ${tricksWord(count)}`;
 }
+
+/** «на 1 карту», «на 2 карты», «на 5 карт». */
+export function cardsAccusative(count: number): string {
+  return `${count} ${plural(count, ["карту", "карты", "карт"])}`;
+}
