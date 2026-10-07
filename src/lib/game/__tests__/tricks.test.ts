@@ -243,14 +243,29 @@ describe("заход джокером: младший", () => {
     expect(resolveTrick(current)).toBe(1);
   });
 
-  it("обязывает остальных ходить в заявленную масть", () => {
+  it("обязывает положить самую младшую карту заявленной масти", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "clubs" }),
+      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "hearts" }),
     ]);
-    const hand = [c("clubs", 8), c("hearts", 14), joker(1)];
+    const hand = [c("hearts", 6), c("hearts", 10), c("clubs", 14), joker(1)];
+    expect(playRequirement(current)).toEqual({
+      kind: "lowest-of",
+      suit: "hearts",
+    });
     expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
-      "clubs-8",
+      "hearts-6",
       "joker-black",
+    ]);
+  });
+
+  it("если заявленной масти нет, на «джокере младшем» можно любую карту", () => {
+    const current = trick(1, [
+      play(1, joker(0), { kind: "lead", mode: "lead-low", suit: "hearts" }),
+    ]);
+    const hand = [c("clubs", 10), c("spades", 14)];
+    expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+      "clubs-10",
+      "spades-14",
     ]);
   });
 });

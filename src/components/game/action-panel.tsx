@@ -25,7 +25,8 @@ function requirementHint(game: GameController): string | null {
     return `${why}: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Нет масти — любую карту. Джокера можно положить всегда.`;
   }
   if (requirement.kind === "lowest-of") {
-    return `Слив: нужно положить самую младшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Нет масти — любую карту. Джокера можно положить всегда.`;
+    const why = ctx.mode === "dump" ? "Слив" : "Джокер младший";
+    return `${why}: нужно положить самую младшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Нет масти — любую карту. Джокера можно положить всегда.`;
   }
   return `Масть хода — ${SUIT_SYMBOL[ctx.suit]} ${SUIT_LABEL[ctx.suit]}. Нет её на руках — кладите любую. Джокера можно всегда.`;
 }

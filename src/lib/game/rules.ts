@@ -96,7 +96,7 @@ export function trickContext(trick: Trick): TrickContext | null {
 /**
  * Что обязан положить игрок, отвечающий на текущий ход.
  * «Джокер старший» и слив «заберёт старшая» требуют самую старшую карту масти.
- * Слив «заберёт младшая» — самую младшую. Нет масти — любую карту.
+ * «Джокер младший» и слив «заберёт младшая» — самую младшую. Нет масти — любую карту.
  */
 export function playRequirement(trick: Trick | null): PlayRequirement {
   if (!trick) return { kind: "none" };
@@ -104,6 +104,9 @@ export function playRequirement(trick: Trick | null): PlayRequirement {
   if (!ctx) return { kind: "none" };
   if (ctx.mode === "lead-high") {
     return { kind: "highest-of", suit: ctx.suit };
+  }
+  if (ctx.mode === "lead-low") {
+    return { kind: "lowest-of", suit: ctx.suit };
   }
   if (ctx.mode === "dump") {
     return ctx.dumpTarget === "lowest"
