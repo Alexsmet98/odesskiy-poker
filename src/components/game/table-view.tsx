@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { isJoker, type Card } from "@/lib/game/cards";
+import { playRequirement } from "@/lib/game/rules";
 import { SCHEDULE } from "@/lib/game/schedule";
 import type { JokerDeclaration, PlayerId } from "@/lib/game/types";
 import { ActionPanel } from "./action-panel";
@@ -42,6 +43,15 @@ export function GameTableView({
   const legalIds = new Set(game.humanLegalCards.map((c) => c.id));
   const canPlay = state.phase === "playing" && game.waitingForHuman;
   const isLead = (state.currentTrick?.plays.length ?? 0) === 0;
+  const requirement = playRequirement(
+    isLead ? null : (state.currentTrick ?? null),
+  );
+  const illegalTitle =
+    requirement.kind === "highest-of"
+      ? "Нельзя: нужно положить самую старшую карту масти"
+      : requirement.kind === "lowest-of"
+        ? "Нельзя: нужно положить самую младшую карту масти"
+        : "Нельзя: нужно ходить в масть";
 
   const onCardClick = (card: Card) => {
     if (!canPlay || !legalIds.has(card.id)) return;
@@ -218,11 +228,7 @@ export function GameTableView({
                       type="button"
                       onClick={() => onCardClick(card)}
                       disabled={!playable}
-                      title={
-                        canPlay && !playable
-                          ? "Нельзя: нужно ходить в масть"
-                          : undefined
-                      }
+                      title={canPlay && !playable ? illegalTitle : undefined}
                       className={cn(
                         "transition-transform duration-150",
                         playable

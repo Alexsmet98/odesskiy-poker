@@ -175,12 +175,30 @@ describe("заход джокером: старший", () => {
     expect(resolveTrick(current)).toBe(1);
   });
 
-  it("обязывает остальных ходить в заявленную масть", () => {
+  it("обязывает положить самую старшую карту заявленной масти", () => {
     const current = trick(1, [
-      play(1, joker(0), { kind: "lead", mode: "lead-high", suit: "clubs" }),
+      play(1, joker(0), { kind: "lead", mode: "lead-high", suit: "hearts" }),
     ]);
-    const hand = [c("clubs", 8), c("hearts", 14)];
-    expect(legalPlays(hand, current).map((x) => x.id)).toEqual(["clubs-8"]);
+    const hand = [c("hearts", 10), c("hearts", 14), c("clubs", 13), joker(1)];
+    expect(playRequirement(current)).toEqual({
+      kind: "highest-of",
+      suit: "hearts",
+    });
+    expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+      "hearts-14",
+      "joker-black",
+    ]);
+  });
+
+  it("если заявленной масти нет, на «джокере старшем» можно любую карту", () => {
+    const current = trick(1, [
+      play(1, joker(0), { kind: "lead", mode: "lead-high", suit: "hearts" }),
+    ]);
+    const hand = [c("clubs", 10), c("spades", 14)];
+    expect(legalPlays(hand, current).map((x) => x.id)).toEqual([
+      "clubs-10",
+      "spades-14",
+    ]);
   });
 
   it("уступает ответному джокеру, объявленному старшим козырем", () => {
@@ -400,6 +418,19 @@ describe("слив: принуждение к старшей/младшей ка
     c("hearts", 7),
     joker(1),
   ];
+
+  it("«заберёт старшая черви»: при десятке и тузе можно только туза", () => {
+    const hearts = trick(0, [
+      play(0, joker(0), {
+        kind: "lead",
+        mode: "dump",
+        suit: "hearts",
+        target: "highest",
+      }),
+    ]);
+    const hand = [c("hearts", 10), c("hearts", 14), c("clubs", 6)];
+    expect(legalPlays(hand, hearts).map((x) => x.id)).toEqual(["hearts-14"]);
+  });
 
   it("«заберёт старшая» разрешает только старшую карту масти и джокера", () => {
     expect(playRequirement(dump("highest"))).toEqual({

@@ -21,10 +21,11 @@ function requirementHint(game: GameController): string | null {
   const requirement = playRequirement(trick);
   if (!ctx) return null;
   if (requirement.kind === "highest-of") {
-    return `Слив: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`;
+    const why = ctx.mode === "dump" ? "Слив" : "Джокер старший";
+    return `${why}: нужно положить самую старшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Нет масти — любую карту. Джокера можно положить всегда.`;
   }
   if (requirement.kind === "lowest-of") {
-    return `Слив: нужно положить самую младшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Джокера можно положить всегда.`;
+    return `Слив: нужно положить самую младшую ${SUIT_LABEL_ACCUSATIVE[requirement.suit]} из вашей руки. Нет масти — любую карту. Джокера можно положить всегда.`;
   }
   return `Масть хода — ${SUIT_SYMBOL[ctx.suit]} ${SUIT_LABEL[ctx.suit]}. Нет её на руках — кладите любую. Джокера можно всегда.`;
 }
