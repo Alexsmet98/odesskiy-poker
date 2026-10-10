@@ -1,8 +1,10 @@
 "use client";
 
+import { Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CardBack } from "./playing-card";
 import type { GameState, PlayerId } from "@/lib/game/types";
+import { useVoicePresence } from "./voice-dock";
 
 const AVATARS: Record<PlayerId, string> = {
   0: "🫵",
@@ -31,6 +33,7 @@ export function PlayerSeat({
   const tricks = state.tricksWon[playerId];
   const isDealer = state.dealer === playerId;
   const cardsLeft = state.hands[playerId].length;
+  const voice = useVoicePresence(playerId);
 
   return (
     <div
@@ -39,6 +42,7 @@ export function PlayerSeat({
         isActive
           ? "border-ember/70 bg-ember/10 shadow-[0_0_30px_-8px_var(--ember)]"
           : "border-white/5 bg-black/40",
+        voice?.talking && "ring-2 ring-emerald-400/80",
         className,
       )}
     >
@@ -66,6 +70,21 @@ export function PlayerSeat({
                 сдача
               </span>
             )}
+            {voice &&
+              (voice.muted ? (
+                <MicOff
+                  className="size-3 text-muted-foreground"
+                  aria-label="Микрофон выключен"
+                />
+              ) : (
+                <Mic
+                  className={cn(
+                    "size-3",
+                    voice.talking ? "text-emerald-400" : "text-ember",
+                  )}
+                  aria-label={voice.talking ? "Говорит" : "Микрофон включён"}
+                />
+              ))}
           </div>
           {!compact && (
             <p className="truncate text-[10px] text-muted-foreground">

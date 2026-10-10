@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { deriveView, type GameController } from "./controller";
 import { GameTableView } from "./table-view";
 import type { ConnectionStatus } from "./use-lobby";
+import { VoiceSession } from "./voice-dock";
 
 /** Партия по сети: ходы уходят на сервер, состояние приходит потоком. */
 export function NetworkTable({
@@ -79,6 +80,12 @@ export function NetworkTable({
   );
 
   return (
+    <VoiceSession
+      code={code}
+      token={session.token}
+      mySeat={event.lobby.mySeat}
+      seats={event.lobby.seats}
+    >
     <GameTableView
       game={controller}
       headerExtra={
@@ -103,5 +110,6 @@ export function NetworkTable({
         </div>
       }
     />
+    </VoiceSession>
   );
 }

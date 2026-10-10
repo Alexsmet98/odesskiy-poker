@@ -4,6 +4,7 @@ import {
   type LobbyInfo,
   type NetAction,
 } from "./protocol";
+import type { VoiceItem, VoiceSignal } from "./voice";
 
 async function request<T>(
   path: string,
@@ -65,4 +66,19 @@ export const lobbyApi = {
     `${lobbyPath(code)}/poll?token=${encodeURIComponent(token)}&v=${version}`,
   eventsUrl: (code: string, token: string) =>
     `${lobbyPath(code)}/events?token=${encodeURIComponent(token)}`,
+  ice: (code: string, token: string) =>
+    request<{ iceServers: RTCIceServer[] }>(`${lobbyPath(code)}/voice/ice`, {
+      token,
+    }),
+  postVoice: (code: string, token: string, signal: VoiceSignal) =>
+    request<{ ok: true }>(`${lobbyPath(code)}/voice`, {
+      method: "POST",
+      token,
+      body: JSON.stringify({ signal }),
+    }),
+  pullVoice: (code: string, token: string, after: number) =>
+    request<{ signals: VoiceItem[] }>(
+      `${lobbyPath(code)}/voice?after=${after}`,
+      { token },
+    ),
 };

@@ -425,3 +425,43 @@ describe("лобби: правка протокола", () => {
     expect(() => manager.act(code, tokens[0], edit)).toThrow(/не сыграна/);
   });
 });
+
+describe("лобби: голос", () => {
+  it("отдаёт приглашение только адресату, а «молчу» — остальным живым", () => {
+    const { manager, code, tokens } = fullLobby();
+    manager.postVoice(code, tokens[0], {
+      kind: "offer",
+      to: 2,
+      sdp: "v=0",
+    });
+    expect(manager.pullVoice(code, tokens[2], 0).map((item) => item.signal.kind)).toEqual([
+      "offer",
+    ]);
+    expect(manager.pullVoice(code, tokens[1], 0)).toHaveLength(0);
+    expect(manager.pullVoice(code, tokens[0], 0)).toHaveLength(0);
+
+    manager.postVoice(code, tokens[0], { kind: "mute", muted: true });
+    expect(manager.pullVoice(code, tokens[1], 0)).toHaveLength(1);
+    expect(manager.pullVoice(code, tokens[3], 0)).toHaveLength(1);
+    expect(manager.pullVoice(code, tokens[0], 0)).toHaveLength(0);
+  });
+
+  it("не соединяет игрока с самим собой и с пустым местом", () => {
+    const { manager } = setup();
+    const host = manager.create("Аня");
+    expect(() =>
+      manager.postVoice(host.code, host.token, {
+        kind: "offer",
+        to: 0,
+        sdp: "v=0",
+      }),
+    ).toThrow(/самим собой/);
+    expect(() =>
+      manager.postVoice(host.code, host.token, {
+        kind: "offer",
+        to: 1,
+        sdp: "v=0",
+      }),
+    ).toThrow(/нет живого/);
+  });
+});

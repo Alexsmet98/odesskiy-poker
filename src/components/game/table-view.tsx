@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { isJoker, type Card } from "@/lib/game/cards";
+import { downloadProtocol } from "@/lib/game/protocol-export";
 import { playRequirement } from "@/lib/game/rules";
 import { SCHEDULE } from "@/lib/game/schedule";
 import type { JokerDeclaration, PlayerId } from "@/lib/game/types";
@@ -156,6 +157,15 @@ export function GameTableView({
                   строки «Пр» — премии, внизу зачёт наборов и сливов.
                 </DialogDescription>
               </DialogHeader>
+              <div className="flex justify-end">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => downloadProtocol(state, game.settlement)}
+                >
+                  Скачать протокол
+                </Button>
+              </div>
               <Scoreboard
                 state={state}
                 settlement={game.settlement}

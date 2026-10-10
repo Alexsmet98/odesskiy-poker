@@ -24,6 +24,7 @@ import {
   type SeatInfo,
   type ServerEvent,
 } from "./protocol";
+import type { VoiceSignal } from "./voice";
 import { maskStateFor } from "./view";
 
 export const TRICK_PAUSE_MS = 1500;
@@ -71,6 +72,15 @@ type Lobby = {
   game: GameState | null;
   timer: unknown;
   touchedAt: number;
+  /** Очередь сигналов голоса для каждого места. */
+  voiceInbox: VoiceItem[][];
+  voiceSeq: number;
+};
+
+type VoiceItem = {
+  id: number;
+  from: PlayerId;
+  signal: VoiceSignal;
 };
 
 export type Scheduler = {
@@ -82,6 +92,25 @@ const defaultScheduler: Scheduler = {
   set: (fn, ms) => setTimeout(fn, ms),
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
+
+/** Кому доставить сигнал: ответ на соединение — одному месту, «молчу/говорю» — остальным живым. */
+function voiceTargets(
+  lobby: Lobby,
+  from: PlayerId,
+  signal: VoiceSignal,
+): PlayerId[] {
+  if (signal.kind === "mute" || signal.kind === "talk") {
+    return PLAYER_IDS.filter(
+      (seat) => seat !== from && lobby.seats[seat].kind === "human",
+    );
+  }
+  const to = signal.to;
+  if (to === from) throw new LobbyError("Нельзя соединяться с самим собой", 400);
+  if (lobby.seats[to].kind !== "human") {
+    throw new LobbyError("За этим местом нет живого игрока", 400);
+  }
+  return [to];
+}
 
 function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new LobbyError("Назовите себя", 400);
@@ -134,6 +163,8 @@ export class LobbyManager {
       game: null,
       timer: null,
       touchedAt: this.now(),
+      voiceInbox: PLAYER_IDS.map(() => []),
+      voiceSeq: 0,
     };
     this.lobbies.set(code, lobby);
     return { code, token, seat: 0 };
@@ -363,6 +394,37 @@ export class LobbyManager {
       const timer = this.scheduler.set(() => finish(false), waitMs);
       set.add(listener);
     });
+  }
+
+  /**
+   * Передаёт голосовой сигнал другому живому игроку того же лобби.
+   * Звук через сервер не идёт — только описание соединения и «говорю / молчу».
+   */
+  postVoice(rawCode: string, token: string, signal: VoiceSignal): void {
+    const lobby = this.requireLobby(rawCode);
+    const from = this.requireSeat(lobby, token);
+    if (lobby.seats[from].kind !== "human") {
+      throw new LobbyError("Говорить может только живой игрок", 403);
+    }
+    const targets = voiceTargets(lobby, from, signal);
+    lobby.voiceSeq += 1;
+    const item: VoiceItem = { id: lobby.voiceSeq, from, signal };
+    for (const seat of targets) {
+      const inbox = lobby.voiceInbox[seat];
+      inbox.push(item);
+      if (inbox.length > 40) inbox.splice(0, inbox.length - 40);
+    }
+    this.touch(lobby);
+  }
+
+  /** Сигналы с номером больше `after`. Клиент сам запоминает последний номер. */
+  pullVoice(rawCode: string, token: string, after: number): VoiceItem[] {
+    const lobby = this.requireLobby(rawCode);
+    const seat = this.requireSeat(lobby, token);
+    if (!Number.isFinite(after) || after < 0) {
+      throw new LobbyError("Не указано, с какого сигнала читать", 400);
+    }
+    return lobby.voiceInbox[seat].filter((item) => item.id > after);
   }
 
   /** Состояние для тестов и отладки: что видит конкретный игрок. */

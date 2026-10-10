@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { downloadProtocol } from "@/lib/game/protocol-export";
 import { cn } from "@/lib/utils";
 import {
   SUIT_LABEL,
@@ -58,7 +59,15 @@ export function ActionPanel({ game }: { game: GameController }) {
             </li>
           ))}
         </ol>
-        <Button onClick={game.exit}>{game.finishLabel}</Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => downloadProtocol(state, game.settlement)}
+          >
+            Скачать протокол
+          </Button>
+          <Button onClick={game.exit}>{game.finishLabel}</Button>
+        </div>
       </Panel>
     );
   }
