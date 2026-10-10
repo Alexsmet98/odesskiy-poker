@@ -7,14 +7,9 @@ import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import { NetworkTable } from "@/components/game/network-table";
 import { useLobbyEvents } from "@/components/game/use-lobby";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { lobbyApi } from "@/lib/net/client";
-import {
-  MAX_NAME_LENGTH,
-  normalizeCode,
-  type ServerEvent,
-} from "@/lib/net/protocol";
+import { normalizeCode, type ServerEvent } from "@/lib/net/protocol";
 import {
   clearSession,
   parseSession,
@@ -26,6 +21,7 @@ import {
 } from "@/lib/net/session";
 import { cn } from "@/lib/utils";
 import { Backdrop, Title } from "./backdrop";
+import { RosterNameField } from "./roster-name";
 
 const subscribeNoop = () => () => {};
 
@@ -96,13 +92,10 @@ function JoinByLink({ code }: { code: string }) {
       >
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="join-name">Ваше имя за столом</Label>
-          <Input
+          <RosterNameField
             id="join-name"
             value={name}
-            maxLength={MAX_NAME_LENGTH}
-            autoFocus
-            placeholder="Например, Лёва"
-            onChange={(e) => setTypedName(e.target.value)}
+            onValueChange={setTypedName}
           />
         </div>
         {error && (

@@ -155,7 +155,7 @@ export class LobbyManager {
   }
 
   create(rawName: unknown): JoinResult {
-    const name = cleanName(rawName);
+    const name = this.rosterName(cleanName(rawName));
     this.sweep();
     if (this.lobbies.size >= MAX_LOBBIES) {
       throw new LobbyError("Сейчас слишком много лобби, зайдите позже", 503);
@@ -199,7 +199,7 @@ export class LobbyManager {
 
   join(rawCode: string, rawName: unknown): JoinResult {
     const lobby = this.requireLobby(rawCode);
-    const name = cleanName(rawName);
+    const name = this.rosterName(cleanName(rawName));
     if (lobby.status !== "waiting")
       throw new LobbyError("Игра в этом лобби уже идёт", 409);
     const taken = lobby.seats.some(
@@ -416,6 +416,17 @@ export class LobbyManager {
 
   private journalStore(): TurnirStore {
     return this.journal ?? turnirStore();
+  }
+
+  /** За стол садится только тот, кто уже есть в журнале турнира. */
+  private rosterName(name: string): string {
+    const known = this.journalStore()
+      .listPlayers()
+      .find((player) => player.name.toLowerCase() === name.toLowerCase());
+    if (!known) {
+      throw new LobbyError("Это имя не в списке турнира", 403);
+    }
+    return known.name;
   }
 
   /** Подписка на события; сразу присылает текущее состояние. Возвращает отписку. */

@@ -8,14 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { lobbyApi } from "@/lib/net/client";
-import {
-  LOBBY_CODE_LENGTH,
-  MAX_NAME_LENGTH,
-  normalizeCode,
-} from "@/lib/net/protocol";
+import { LOBBY_CODE_LENGTH, normalizeCode } from "@/lib/net/protocol";
 import { rememberedName, saveSession } from "@/lib/net/session";
 import { cn } from "@/lib/utils";
 import { Backdrop, Title } from "./backdrop";
+import { RosterNameField } from "./roster-name";
 
 type Mode = "create" | "join" | null;
 
@@ -111,14 +108,10 @@ export function MainMenu() {
         >
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="player-name">Ваше имя за столом</Label>
-            <Input
+            <RosterNameField
               id="player-name"
               value={name}
-              maxLength={MAX_NAME_LENGTH}
-              autoComplete="nickname"
-              autoFocus
-              placeholder="Например, Лёва"
-              onChange={(e) => setTypedName(e.target.value)}
+              onValueChange={setTypedName}
             />
           </div>
           {mode === "join" && (

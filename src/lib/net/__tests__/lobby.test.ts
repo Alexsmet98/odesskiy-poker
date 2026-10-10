@@ -33,10 +33,19 @@ class FakeScheduler implements Scheduler {
   }
 }
 
+const TEST_PLAYERS = ["Аня", "Борис", "Вера", "Глеб", "Дима"];
+
 function setup() {
   const scheduler = new FakeScheduler();
-  const manager = new LobbyManager(scheduler);
-  return { scheduler, manager };
+  const journal = new TurnirStore(
+    path.join(mkdtempSync(path.join(tmpdir(), "turnir-lobby-")), "turnir.json"),
+    {
+      players: TEST_PLAYERS.map((name) => ({ name })),
+      games: [],
+    },
+  );
+  const manager = new LobbyManager(scheduler, Date.now, journal);
+  return { scheduler, manager, journal };
 }
 
 function fullLobby() {
@@ -54,6 +63,18 @@ function fullLobby() {
 }
 
 describe("лобби: комната и места", () => {
+  it("сажает только того, кто есть в списке турнира, и берёт написание из списка", () => {
+    const { manager } = setup();
+    expect(() => manager.create("Лёва")).toThrow(/списке турнира/);
+    const created = manager.create("аня");
+    expect(manager.viewFor(created.code, created.token).lobby.seats[0].name).toBe(
+      "Аня",
+    );
+    expect(() => manager.join(created.code, "нет такого")).toThrow(
+      /списке турнира/,
+    );
+  });
+
   it("создаёт лобби с кодом из четырёх букв и хозяином на месте 0", () => {
     const { manager } = setup();
     const created = manager.create("  Аня  ");
@@ -551,6 +572,7 @@ function playToEnd(
 describe("лобби: журнал турнира", () => {
   it("победитель живого стола записывает партию один раз", () => {
     const journal = blankJournal();
+    for (const name of ["Аня", "Борис", "Вера", "Глеб"]) journal.addPlayer(name);
     const scheduler = new FakeScheduler();
     const manager = new LobbyManager(scheduler, Date.now, journal);
     const host = manager.create("Аня");
@@ -598,6 +620,7 @@ describe("лобби: журнал турнира", () => {
 
   it("не пишет партию, если за столом есть бот", () => {
     const journal = blankJournal();
+    journal.addPlayer("Аня");
     const scheduler = new FakeScheduler();
     const manager = new LobbyManager(scheduler, Date.now, journal);
     const host = manager.create("Аня");
