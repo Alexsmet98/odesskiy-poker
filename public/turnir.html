@@ -259,19 +259,14 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ================= НАСТРОЙКИ ОБЛАКА (Supabase) ================= */
-const SUPABASE_URL='https://hxoscoaxzbnzaxrntdnv.supabase.co';
-const SUPABASE_KEY='sb_publishable_1piW3FBqK4dn_LQfAtl42g_vA13Go04';
-const API=SUPABASE_URL+'/rest/v1/games';
-const PAPI=SUPABASE_URL+'/rest/v1/players';
-const HDR={apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'};
-
-async function apiGet(q=''){const r=await fetch(API+q,{headers:HDR});if(!r.ok)throw new Error('GET '+r.status);return r.json();}
-async function apiPost(obj){const r=await fetch(API,{method:'POST',headers:{...HDR,Prefer:'return=minimal'},body:JSON.stringify(obj)});if(!r.ok)throw new Error('POST '+r.status+' '+await r.text());}
-async function apiDel(id){const r=await fetch(API+'?id=eq.'+id,{method:'DELETE',headers:HDR});if(!r.ok)throw new Error('DEL '+r.status);}
-async function pullPlayers(){const r=await fetch(PAPI+'?select=name',{headers:HDR});if(!r.ok)throw new Error('GP '+r.status);return r.json();}
-async function apiPostPlayer(name){const r=await fetch(PAPI,{method:'POST',headers:{...HDR,Prefer:'return=minimal'},body:JSON.stringify({name})});if(!r.ok)throw new Error('PP '+r.status);}
-async function apiDelPlayer(name){const r=await fetch(PAPI+'?name=eq.'+encodeURIComponent(name),{method:'DELETE',headers:HDR});if(!r.ok)throw new Error('PD '+r.status);}
+/* ================= ЖУРНАЛ НА НАШЕМ СЕРВЕРЕ ================= */
+const JSON_HDR={'Content-Type':'application/json'};
+async function apiGet(){const r=await fetch('/api/turnir/games');if(!r.ok)throw new Error('GET '+r.status);return r.json();}
+async function apiPost(obj){const r=await fetch('/api/turnir/games',{method:'POST',headers:JSON_HDR,body:JSON.stringify(obj)});if(!r.ok)throw new Error('POST '+r.status+' '+await r.text());}
+async function apiDel(id){const r=await fetch('/api/turnir/games/'+id,{method:'DELETE'});if(!r.ok)throw new Error('DEL '+r.status);}
+async function pullPlayers(){const r=await fetch('/api/turnir/players');if(!r.ok)throw new Error('GP '+r.status);return r.json();}
+async function apiPostPlayer(name){const r=await fetch('/api/turnir/players',{method:'POST',headers:JSON_HDR,body:JSON.stringify({name})});if(!r.ok)throw new Error('PP '+r.status);}
+async function apiDelPlayer(name){const r=await fetch('/api/turnir/players/'+encodeURIComponent(name),{method:'DELETE'});if(!r.ok)throw new Error('PD '+r.status);}
 
 /* ================= ИКОНКИ ================= */
 const ICONS={
@@ -329,7 +324,7 @@ async function sync(force){
   if(!loaded||force)setStatus('sync');
   try{
     const [rows,prows]=await Promise.all([
-      apiGet('?select=id,date,players'),
+      apiGet(),
       pullPlayers().catch(()=>null)
     ]);
     const clean=rows.map(r=>({id:Number(r.id),date:r.date,players:Array.isArray(r.players)?r.players:[]}));

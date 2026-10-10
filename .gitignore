@@ -42,3 +42,6 @@ next-env.d.ts
 
 # screenshots from manual test passes
 /.artifacts
+
+# журнал турнира на диске сервера и в локальной разработке
+/data
