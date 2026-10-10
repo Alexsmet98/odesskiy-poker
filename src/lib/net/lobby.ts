@@ -5,7 +5,10 @@ import {
   applyAction,
   createGame,
   DEFAULT_PLAYERS,
+  settlement,
 } from "@/lib/game/engine";
+import { totalJokers } from "@/lib/game/scoring";
+import { TurnirError, turnirStore, type TurnirStore } from "@/lib/turnir/store";
 import {
   PLAYER_IDS,
   type GameState,
@@ -78,6 +81,8 @@ type Lobby = {
   /** Куски звука (PCM) для каждого места. */
   audioInbox: AudioFrame[][];
   audioSeq: number;
+  /** Результат этой партии уже записан в журнал турнира. */
+  journalRecorded: boolean;
 };
 
 type AudioFrame = {
@@ -142,6 +147,7 @@ export class LobbyManager {
   constructor(
     private readonly scheduler: Scheduler = defaultScheduler,
     private readonly now: () => number = Date.now,
+    private readonly journal: TurnirStore | null = null,
   ) {}
 
   get size(): number {
@@ -176,6 +182,7 @@ export class LobbyManager {
       voiceSeq: 0,
       audioInbox: PLAYER_IDS.map(() => []),
       audioSeq: 0,
+      journalRecorded: false,
     };
     this.lobbies.set(code, lobby);
     return { code, token, seat: 0 };
@@ -346,6 +353,69 @@ export class LobbyManager {
     this.touch(lobby);
     this.broadcast(lobby);
     this.schedule(lobby);
+  }
+
+  /**
+   * Победитель законченной партии, где все четверо — люди, записывает
+   * очки и джокеры в журнал. Повторный вызов ничего не дублирует.
+   */
+  recordJournal(rawCode: string, token: string): { ok: true; already: boolean } {
+    const lobby = this.requireLobby(rawCode);
+    const seat = this.requireSeat(lobby, token);
+    const game = lobby.game;
+    if (!game || game.phase !== "game-over") {
+      throw new LobbyError("Партия ещё не закончилась", 409);
+    }
+    if (lobby.seats.some((item) => item.kind !== "human")) {
+      throw new LobbyError(
+        "В журнал попадает только партия, где все четверо — игроки",
+        409,
+      );
+    }
+    const totals = settlement(game).total;
+    const best = Math.max(...totals);
+    if (totals[seat] !== best) {
+      throw new LobbyError("Занести результат может победитель", 403);
+    }
+    if (lobby.journalRecorded) return { ok: true, already: true };
+
+    const jokers = totalJokers(game.results);
+    const players = PLAYER_IDS.map((id) => {
+      const sitting = lobby.seats[id];
+      return {
+        name: sitting.kind === "empty" ? "" : sitting.name,
+        points: totals[id],
+        jokers: jokers[id],
+      };
+    });
+    const stamp = this.now();
+    let saved = false;
+    for (let attempt = 0; attempt < 5 && !saved; attempt += 1) {
+      try {
+        this.journalStore().recordResult({
+          id: stamp * 1000 + attempt * 10 + seat + 1,
+          date: isoDay(stamp),
+          players,
+        });
+        saved = true;
+      } catch (error) {
+        const retry = error instanceof TurnirError && error.status === 409;
+        if (!retry || attempt === 4) {
+          if (error instanceof TurnirError) {
+            throw new LobbyError(error.message, error.status);
+          }
+          throw error;
+        }
+      }
+    }
+    lobby.journalRecorded = true;
+    this.touch(lobby);
+    this.broadcast(lobby);
+    return { ok: true, already: false };
+  }
+
+  private journalStore(): TurnirStore {
+    return this.journal ?? turnirStore();
   }
 
   /** Подписка на события; сразу присылает текущее состояние. Возвращает отписку. */
@@ -587,6 +657,7 @@ export class LobbyManager {
       hostSeat: lobby.hostSeat,
       mySeat,
       seats,
+      journalRecorded: lobby.journalRecorded,
     };
   }
 
@@ -667,4 +738,11 @@ export class LobbyManager {
     this.broadcast(lobby);
     this.schedule(lobby);
   }
+}
+
+function isoDay(ms: number): string {
+  const date = new Date(ms);
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${month}-${day}`;
 }

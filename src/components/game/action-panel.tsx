@@ -59,6 +59,35 @@ export function ActionPanel({ game }: { game: GameController }) {
             </li>
           ))}
         </ol>
+        {game.journalOffer &&
+          (game.journalOffer.recorded ? (
+            <p className="text-sm text-emerald-300">
+              Результат записан в журнал.{" "}
+              <a href="/turnir" className="underline">
+                Открыть
+              </a>
+            </p>
+          ) : (
+            <div className="flex w-full flex-col items-center gap-2">
+              <p className="text-sm text-muted-foreground">
+                {game.journalOffer.tied
+                  ? "Первое место делят несколько игроков."
+                  : "Вы набрали больше всех."}{" "}
+                Занести очки и джокеры в журнал турнира?
+              </p>
+              {game.journalOffer.error && (
+                <p role="alert" className="text-sm text-red-300">
+                  {game.journalOffer.error}
+                </p>
+              )}
+              <Button
+                disabled={game.journalOffer.busy}
+                onClick={game.journalOffer.save}
+              >
+                {game.journalOffer.busy ? "Записываю…" : "Занести в журнал"}
+              </Button>
+            </div>
+          ))}
         <div className="flex flex-wrap justify-center gap-2">
           <Button
             variant="secondary"

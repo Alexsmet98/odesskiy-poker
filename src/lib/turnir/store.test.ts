@@ -94,4 +94,26 @@ describe("журнал турнира", () => {
       }),
     ).toThrow(/список/);
   });
+
+  it("запись партии добавляет новых игроков и не затирает уже известных", () => {
+    const store = openStore();
+    store.recordResult({
+      id: 7,
+      date: "2026-10-10",
+      players: [
+        { name: "аркаша", points: 40, jokers: 3 },
+        { name: "Новый", points: -10, jokers: 1 },
+      ],
+    });
+    expect(store.listPlayers().map((player) => player.name)).toEqual([
+      "Аркаша",
+      "Настя",
+      "Новый",
+    ]);
+    expect(store.listGames()[0].players[0]).toEqual({
+      name: "Аркаша",
+      points: 40,
+      jokers: 3,
+    });
+  });
 });

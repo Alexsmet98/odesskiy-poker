@@ -77,6 +77,24 @@ export class TurnirStore {
     this.save(db);
   }
 
+  /** Партия из лобби: недостающих игроков добавляет в список и пишет одну игру. */
+  recordResult(raw: unknown): void {
+    const game = cleanGame(raw);
+    const db = this.load();
+    if (db.games.some((item) => item.id === game.id)) {
+      throw new TurnirError("Такая игра уже записана", 409);
+    }
+    for (const score of game.players) {
+      const known = db.players.find((player) =>
+        sameName(player.name, score.name),
+      );
+      if (known) score.name = known.name;
+      else db.players.push({ name: score.name });
+    }
+    db.games.push(game);
+    this.save(db);
+  }
+
   deleteGame(rawId: unknown): void {
     const id = cleanId(rawId);
     const db = this.load();

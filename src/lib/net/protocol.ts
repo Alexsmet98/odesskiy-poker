@@ -23,6 +23,8 @@ export type LobbySnapshot = {
   hostSeat: PlayerId;
   mySeat: PlayerId;
   seats: SeatInfo[];
+  /** Победитель уже занёс эту партию в журнал турнира. */
+  journalRecorded: boolean;
 };
 
 /** Что сервер присылает игроку: состояние лобби и партия, из которой вырезано всё чужое. */

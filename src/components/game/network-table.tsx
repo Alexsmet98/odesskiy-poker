@@ -30,6 +30,9 @@ export function NetworkTable({
     message: string;
     at: ServerEvent;
   } | null>(null);
+  const [journalBusy, setJournalBusy] = useState(false);
+  const [journalError, setJournalError] = useState<string | null>(null);
+  const [journalSaved, setJournalSaved] = useState(false);
   const game = event.game;
   if (!game) throw new Error("Сетевой стол открыт без партии");
 
@@ -54,11 +57,22 @@ export function NetworkTable({
     router.push("/");
   }, [code, router, session.token]);
 
-  const controller: GameController = useMemo(
-    () => ({
+  const saveJournal = useCallback(() => {
+    setJournalBusy(true);
+    setJournalError(null);
+    lobbyApi.recordJournal(code, session.token).then(
+      () => setJournalSaved(true),
+      (e: unknown) =>
+        setJournalError(e instanceof Error ? e.message : "Не записалось"),
+    ).finally(() => setJournalBusy(false));
+  }, [code, session.token]);
+
+  const controller: GameController = useMemo(() => {
+    const view = deriveView(game, event.lobby.mySeat);
+    return {
       state: game,
       human: event.lobby.mySeat,
-      ...deriveView(game, event.lobby.mySeat),
+      ...view,
       error,
       placeBid: (value: number) => send({ type: "bid", value }),
       playCard: (card: Card, declaration: JokerDeclaration | null = null) =>
@@ -71,8 +85,28 @@ export function NetworkTable({
       exitLabel: "Выйти",
       finishLabel: "В меню",
       exit,
-    }),
-    [error, event.lobby.hostSeat, event.lobby.mySeat, exit, game, send],
+      journalOffer: journalOffer(
+        event,
+        game.phase,
+        view.settlement.total,
+        journalSaved,
+        journalBusy,
+        journalError,
+        saveJournal,
+      ),
+    };
+  },
+    [
+      error,
+      event,
+      exit,
+      game,
+      journalBusy,
+      journalError,
+      journalSaved,
+      saveJournal,
+      send,
+    ],
   );
 
   const offline = event.lobby.seats.filter(
@@ -112,4 +146,26 @@ export function NetworkTable({
     />
     </VoiceSession>
   );
+}
+
+function journalOffer(
+  event: ServerEvent,
+  phase: string,
+  totals: number[],
+  saved: boolean,
+  busy: boolean,
+  error: string | null,
+  save: () => void,
+): GameController["journalOffer"] {
+  if (phase !== "game-over") return undefined;
+  if (!event.lobby.seats.every((seat) => seat.kind === "human")) return undefined;
+  const best = Math.max(...totals);
+  if (totals[event.lobby.mySeat] !== best) return undefined;
+  return {
+    recorded: event.lobby.journalRecorded || saved,
+    tied: totals.filter((value) => value === best).length > 1,
+    busy,
+    error,
+    save,
+  };
 }

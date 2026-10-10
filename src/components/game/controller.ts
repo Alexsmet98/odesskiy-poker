@@ -37,6 +37,17 @@ export type GameController = {
   /** Кнопка после окончания партии. */
   finishLabel: string;
   exit: () => void;
+  /**
+   * Предложение победителю занести партию в журнал.
+   * Есть только в сетевой игре, где все четверо — люди.
+   */
+  journalOffer?: {
+    recorded: boolean;
+    tied: boolean;
+    busy: boolean;
+    error: string | null;
+    save: () => void;
+  };
 };
 
 export function deriveView(state: GameState, human: PlayerId) {

@@ -1,6 +1,11 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { legalBidsFor } from "@/lib/game/engine";
+import { legalBidsFor, settlement } from "@/lib/game/engine";
 import { legalPlays } from "@/lib/game/rules";
+import type { GameState, JokerDeclaration, PlayerId } from "@/lib/game/types";
+import { TurnirStore } from "@/lib/turnir/store";
 import { LobbyError, LobbyManager, type Scheduler } from "../lobby";
 import type { ServerEvent } from "../protocol";
 
@@ -475,5 +480,132 @@ describe("лобби: голос", () => {
     expect(Buffer.from(heard[0].pcm, "base64").equals(pcm)).toBe(true);
     expect(manager.pullAudio(code, tokens[0], 0)).toHaveLength(0);
     expect(manager.pullAudio(code, tokens[2], heard[0].id)).toHaveLength(0);
+  });
+});
+
+function blankJournal() {
+  const dir = mkdtempSync(path.join(tmpdir(), "turnir-lobby-"));
+  return new TurnirStore(path.join(dir, "turnir.json"), {
+    players: [],
+    games: [],
+  });
+}
+
+function playToEnd(
+  manager: LobbyManager,
+  scheduler: FakeScheduler,
+  code: string,
+  tokens: (string | null)[],
+): GameState {
+  const watcher = tokens.find((token): token is string => token !== null);
+  if (!watcher) throw new Error("нет живого игрока");
+  for (const token of tokens) {
+    if (token) manager.subscribe(code, token, () => {});
+  }
+  for (let guard = 0; guard < 30000; guard += 1) {
+    scheduler.runNext();
+    const game = manager.viewFor(code, watcher).game;
+    if (!game) throw new Error("партия не началась");
+    if (game.phase === "game-over") return game;
+    if (game.phase === "hand-complete" || game.phase === "premium") {
+      manager.act(code, watcher, { type: "next-row", rowIndex: game.rowIndex });
+      continue;
+    }
+    const acting: PlayerId | null =
+      game.phase === "bidding"
+        ? game.bidTurn
+        : game.phase === "playing"
+          ? game.turn
+          : null;
+    if (acting === null) continue;
+    const token = tokens[acting];
+    if (!token) continue;
+    const mine = manager.viewFor(code, token).game!;
+    if (mine.phase === "bidding") {
+      manager.act(code, token, {
+        type: "bid",
+        value: legalBidsFor(mine, acting)[0],
+      });
+    } else if (mine.phase === "playing") {
+      const trick = mine.currentTrick!;
+      const card = legalPlays(
+        mine.hands[acting],
+        trick.plays.length === 0 ? null : trick,
+      )[0];
+      const declaration: JokerDeclaration | null =
+        card.kind === "joker"
+          ? trick.plays.length === 0
+            ? { kind: "lead", mode: "lead-high", suit: "spades" }
+            : { kind: "response", mode: "low" }
+          : null;
+      manager.act(code, token, {
+        type: "play",
+        cardId: card.id,
+        declaration,
+      });
+    }
+  }
+  throw new Error("партия не дошла до конца");
+}
+
+describe("лобби: журнал турнира", () => {
+  it("победитель живого стола записывает партию один раз", () => {
+    const journal = blankJournal();
+    const scheduler = new FakeScheduler();
+    const manager = new LobbyManager(scheduler, Date.now, journal);
+    const host = manager.create("Аня");
+    const names = ["Борис", "Вера", "Глеб"];
+    const tokens = [
+      host.token,
+      ...names.map((name) => manager.join(host.code, name).token),
+    ];
+    manager.start(host.code, host.token);
+    expect(() => manager.recordJournal(host.code, host.token)).toThrow(
+      /не закончилась/,
+    );
+
+    const finished = playToEnd(manager, scheduler, host.code, tokens);
+    const totals = settlement(finished).total;
+    const best = Math.max(...totals);
+    const winner = totals.findIndex((value) => value === best);
+    const loser = totals.findIndex((value) => value !== best);
+    if (loser >= 0) {
+      expect(() => manager.recordJournal(host.code, tokens[loser])).toThrow(
+        /победитель/,
+      );
+    }
+
+    const saved = manager.recordJournal(host.code, tokens[winner]);
+    expect(saved).toEqual({ ok: true, already: false });
+    expect(manager.viewFor(host.code, tokens[winner]).lobby.journalRecorded).toBe(
+      true,
+    );
+    expect(manager.recordJournal(host.code, tokens[winner])).toEqual({
+      ok: true,
+      already: true,
+    });
+    expect(journal.listGames()).toHaveLength(1);
+    expect(journal.listGames()[0].players.map((player) => player.name)).toEqual([
+      "Аня",
+      "Борис",
+      "Вера",
+      "Глеб",
+    ]);
+    expect(journal.listGames()[0].players.map((player) => player.points)).toEqual(
+      totals,
+    );
+  });
+
+  it("не пишет партию, если за столом есть бот", () => {
+    const journal = blankJournal();
+    const scheduler = new FakeScheduler();
+    const manager = new LobbyManager(scheduler, Date.now, journal);
+    const host = manager.create("Аня");
+    manager.start(host.code, host.token);
+    playToEnd(manager, scheduler, host.code, [host.token, null, null, null]);
+    expect(() => manager.recordJournal(host.code, host.token)).toThrow(
+      /все четверо/,
+    );
+    expect(journal.listGames()).toHaveLength(0);
   });
 });
