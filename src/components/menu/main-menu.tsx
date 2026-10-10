@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, DoorOpen, Plus } from "lucide-react";
+import { Bot, DoorOpen, Plus, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type FormEvent } from "react";
@@ -94,6 +94,14 @@ export function MainMenu() {
           description="Вы против Жоры Лимана, Розы и Сёмы Тихого."
           href="/bots"
         />
+        <MenuOption
+          index={4}
+          icon={<Trophy className="size-5" />}
+          title="Журнал турнира"
+          description="Общие игры, рейтинг и награды — у всех один список."
+          href="/turnir"
+          native
+        />
       </nav>
 
       {mode && (
@@ -158,6 +166,7 @@ function MenuOption({
   active,
   onClick,
   href,
+  native,
 }: {
   index: number;
   icon: React.ReactNode;
@@ -166,6 +175,7 @@ function MenuOption({
   active?: boolean;
   onClick?: () => void;
   href?: string;
+  native?: boolean;
 }) {
   const className = cn(
     "group flex w-full items-center gap-4 rounded-lg border bg-black/55 px-4 py-4 text-left backdrop-blur transition-colors",
@@ -188,6 +198,13 @@ function MenuOption({
       </span>
     </>
   );
+  if (href && native) {
+    return (
+      <a href={href} className={className}>
+        {body}
+      </a>
+    );
+  }
   if (href) {
     return (
       <Link href={href} className={className}>
