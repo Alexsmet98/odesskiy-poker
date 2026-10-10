@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PlayerId } from "@/lib/game/types";
@@ -63,20 +63,6 @@ export function VoiceSession({
           </div>
         )}
       </div>
-      {others.map((seat) => (
-        <RemoteAudio key={seat} stream={voice.remoteStreams[seat]} />
-      ))}
     </VoicePresenceContext.Provider>
   );
-}
-
-function RemoteAudio({ stream }: { stream: MediaStream | undefined }) {
-  const ref = useRef<HTMLAudioElement>(null);
-  useEffect(() => {
-    const audio = ref.current;
-    if (!audio) return;
-    audio.srcObject = stream ?? null;
-    if (stream) void audio.play().catch(() => {});
-  }, [stream]);
-  return <audio ref={ref} autoPlay />;
 }

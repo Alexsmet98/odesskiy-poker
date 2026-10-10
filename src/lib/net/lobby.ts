@@ -75,6 +75,15 @@ type Lobby = {
   /** Очередь сигналов голоса для каждого места. */
   voiceInbox: VoiceItem[][];
   voiceSeq: number;
+  /** Куски звука (PCM) для каждого места. */
+  audioInbox: AudioFrame[][];
+  audioSeq: number;
+};
+
+type AudioFrame = {
+  id: number;
+  from: PlayerId;
+  pcm: Buffer;
 };
 
 type VoiceItem = {
@@ -165,6 +174,8 @@ export class LobbyManager {
       touchedAt: this.now(),
       voiceInbox: PLAYER_IDS.map(() => []),
       voiceSeq: 0,
+      audioInbox: PLAYER_IDS.map(() => []),
+      audioSeq: 0,
     };
     this.lobbies.set(code, lobby);
     return { code, token, seat: 0 };
@@ -397,8 +408,7 @@ export class LobbyManager {
   }
 
   /**
-   * Передаёт голосовой сигнал другому живому игроку того же лобби.
-   * Звук через сервер не идёт — только описание соединения и «говорю / молчу».
+   * Передаёт «говорю / молчу» остальным живым игрокам того же лобби.
    */
   postVoice(rawCode: string, token: string, signal: VoiceSignal): void {
     const lobby = this.requireLobby(rawCode);
@@ -425,6 +435,50 @@ export class LobbyManager {
       throw new LobbyError("Не указано, с какого сигнала читать", 400);
     }
     return lobby.voiceInbox[seat].filter((item) => item.id > after);
+  }
+
+  /**
+   * Кладёт кусок микрофона остальным живым игрокам.
+   * Звук идёт через этот сервер, а не напрямую между браузерами.
+   */
+  postAudio(rawCode: string, token: string, pcm: Buffer): void {
+    const lobby = this.requireLobby(rawCode);
+    const from = this.requireSeat(lobby, token);
+    if (lobby.seats[from].kind !== "human") {
+      throw new LobbyError("Говорить может только живой игрок", 403);
+    }
+    if (pcm.length === 0 || pcm.length > 32_000 || pcm.length % 2 !== 0) {
+      throw new LobbyError("Непонятный кусок звука", 400);
+    }
+    lobby.audioSeq += 1;
+    const frame: AudioFrame = { id: lobby.audioSeq, from, pcm };
+    for (const seat of PLAYER_IDS) {
+      if (seat === from || lobby.seats[seat].kind !== "human") continue;
+      const inbox = lobby.audioInbox[seat];
+      inbox.push(frame);
+      if (inbox.length > 40) inbox.splice(0, inbox.length - 40);
+    }
+    this.touch(lobby);
+  }
+
+  /** Куски звука с номером больше `after`. */
+  pullAudio(
+    rawCode: string,
+    token: string,
+    after: number,
+  ): { id: number; from: PlayerId; pcm: string }[] {
+    const lobby = this.requireLobby(rawCode);
+    const seat = this.requireSeat(lobby, token);
+    if (!Number.isFinite(after) || after < 0) {
+      throw new LobbyError("Не указано, с какого звука читать", 400);
+    }
+    return lobby.audioInbox[seat]
+      .filter((frame) => frame.id > after)
+      .map((frame) => ({
+        id: frame.id,
+        from: frame.from,
+        pcm: frame.pcm.toString("base64"),
+      }));
   }
 
   /** Состояние для тестов и отладки: что видит конкретный игрок. */

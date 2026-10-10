@@ -10,10 +10,13 @@ export type VoicePresence = {
   talking: boolean;
 };
 
+const SAMPLE_RATE = 16_000;
+/** Сколько сэмплов копить перед отправкой: 100 мс. */
+const FRAME = 1600;
 
 /**
- * Голос за столом: браузеры соединяются напрямую.
- * Младшее место само предлагает соединение, старшее отвечает.
+ * Голос за столом идёт через сервер лобби, а не напрямую между браузерами.
+ * Индикатор «говорит» и сам звук поэтому доходят одним и тем же путём.
  */
 export function useTableVoice(
   code: string,
@@ -26,20 +29,15 @@ export function useTableVoice(
   const [presence, setPresence] = useState<
     Partial<Record<PlayerId, VoicePresence>>
   >({});
-  const [remoteStreams, setRemoteStreams] = useState<
-    Partial<Record<PlayerId, MediaStream>>
-  >({});
 
   const micOnRef = useRef(false);
   const othersRef = useRef(others);
   useEffect(() => {
     othersRef.current = others;
   }, [others]);
-  const pcs = useRef(new Map<PlayerId, RTCPeerConnection>());
-  const pendingIce = useRef(new Map<PlayerId, RTCIceCandidateInit[]>());
-  const localStream = useRef<MediaStream | null>(null);
-  const iceServers = useRef<RTCIceServer[] | null>(null);
-  const after = useRef(0);
+  const playCtx = useRef<AudioContext | null>(null);
+  const capture = useRef<{ stop: () => void } | null>(null);
+  const playAt = useRef(new Map<number, number>());
 
   const send = useCallback(
     (signal: VoiceSignal) => {
@@ -48,231 +46,150 @@ export function useTableVoice(
     [code, token],
   );
 
-  const closeAll = useCallback(() => {
-    for (const pc of pcs.current.values()) pc.close();
-    pcs.current.clear();
-    pendingIce.current.clear();
-    localStream.current?.getTracks().forEach((track) => track.stop());
-    localStream.current = null;
-    setRemoteStreams({});
+  const stopCapture = useCallback(() => {
+    capture.current?.stop();
+    capture.current = null;
   }, []);
 
-  const makePc = useCallback(
-    (remote: PlayerId) => {
-      const existing = pcs.current.get(remote);
-      if (existing && existing.connectionState !== "closed") return existing;
-      const pc = new RTCPeerConnection({
-        iceServers: iceServers.current ?? [],
-      });
-      pcs.current.set(remote, pc);
-      for (const track of localStream.current?.getTracks() ?? []) {
-        pc.addTrack(track, localStream.current as MediaStream);
-      }
-      pc.onicecandidate = (event) => {
-        send({
-          kind: "ice",
-          to: remote,
-          candidate: event.candidate ? event.candidate.toJSON() : null,
-        });
-      };
-      pc.ontrack = (event) => {
-        const stream = event.streams[0] ?? new MediaStream([event.track]);
-        setRemoteStreams((prev) => ({ ...prev, [remote]: stream }));
-      };
-      pc.onconnectionstatechange = () => {
-        if (
-          pc.connectionState === "failed" ||
-          pc.connectionState === "closed"
-        ) {
-          setRemoteStreams((prev) => {
-            const next = { ...prev };
-            delete next[remote];
-            return next;
-          });
-        }
-      };
-      return pc;
-    },
-    [send],
-  );
-
-  const flushIce = useCallback(async (remote: PlayerId) => {
-    const pc = pcs.current.get(remote);
-    const queued = pendingIce.current.get(remote) ?? [];
-    pendingIce.current.delete(remote);
-    if (!pc) return;
-    for (const candidate of queued) {
-      await pc.addIceCandidate(candidate).catch(() => {});
-    }
+  const playFrame = useCallback((from: number, bytes: Uint8Array) => {
+    const ctx = playCtx.current;
+    if (!ctx || bytes.length < 2) return;
+    const samples = new Int16Array(
+      bytes.buffer,
+      bytes.byteOffset,
+      Math.floor(bytes.byteLength / 2),
+    );
+    const buffer = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
+    const channel = buffer.getChannelData(0);
+    for (let i = 0; i < samples.length; i += 1) channel[i] = samples[i] / 32768;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    const now = ctx.currentTime;
+    let when = playAt.current.get(from) ?? 0;
+    if (when < now + 0.02 || when > now + 0.45) when = now + 0.08;
+    source.start(when);
+    playAt.current.set(from, when + buffer.duration);
   }, []);
-
-  const offerTo = useCallback(
-    async (remote: PlayerId) => {
-      const current = pcs.current.get(remote);
-      if (
-        current &&
-        current.connectionState !== "failed" &&
-        current.connectionState !== "closed" &&
-        (current.currentRemoteDescription ||
-          current.signalingState === "have-local-offer")
-      ) {
-        return;
-      }
-      if (current) {
-        current.close();
-        pcs.current.delete(remote);
-      }
-      const pc = makePc(remote);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      send({ kind: "offer", to: remote, sdp: offer.sdp ?? "" });
-    },
-    [makePc, send],
-  );
-
-  const onSignal = useCallback(
-    async (from: PlayerId, signal: VoiceSignal) => {
-      if (signal.kind === "mute" || signal.kind === "talk") {
-        setPresence((prev) => ({
-          ...prev,
-          [from]: {
-            muted:
-              signal.kind === "mute" ? signal.muted : (prev[from]?.muted ?? true),
-            talking:
-              signal.kind === "talk"
-                ? signal.talking
-                : (prev[from]?.talking ?? false),
-          },
-        }));
-        return;
-      }
-      if (!micOnRef.current || signal.to !== mySeat) return;
-      if (signal.kind === "ice") {
-        const pc = pcs.current.get(from);
-        if (!pc || !pc.remoteDescription) {
-          if (signal.candidate) {
-            const queued = pendingIce.current.get(from) ?? [];
-            queued.push(signal.candidate);
-            pendingIce.current.set(from, queued);
-          }
-          return;
-        }
-        if (signal.candidate) {
-          await pc.addIceCandidate(signal.candidate).catch(() => {});
-        }
-        return;
-      }
-      if (signal.kind === "offer") {
-        if (mySeat < from) return;
-        const existing = pcs.current.get(from);
-        if (existing) {
-          existing.close();
-          pcs.current.delete(from);
-        }
-        const pc = makePc(from);
-        await pc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
-        await flushIce(from);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        send({ kind: "answer", to: from, sdp: answer.sdp ?? "" });
-        return;
-      }
-      const pc = pcs.current.get(from);
-      if (!pc) return;
-      await pc.setRemoteDescription({ type: "answer", sdp: signal.sdp });
-      await flushIce(from);
-    },
-    [flushIce, makePc, mySeat, send],
-  );
 
   useEffect(() => {
     let stopped = false;
+    let afterSignal = 0;
+    let afterAudio = 0;
     const poll = async () => {
       while (!stopped) {
         try {
-          const reply = await lobbyApi.pullVoice(code, token, after.current);
-          for (const item of reply.signals) {
-            after.current = Math.max(after.current, item.id);
-            await onSignal(item.from, item.signal);
+          const signals = await lobbyApi.pullVoice(code, token, afterSignal);
+          for (const item of signals.signals) {
+            afterSignal = Math.max(afterSignal, item.id);
+            if (item.signal.kind !== "mute" && item.signal.kind !== "talk") continue;
+            setPresence((prev) => ({
+              ...prev,
+              [item.from]: {
+                muted:
+                  item.signal.kind === "mute"
+                    ? item.signal.muted
+                    : (prev[item.from]?.muted ?? true),
+                talking:
+                  item.signal.kind === "talk"
+                    ? item.signal.talking
+                    : (prev[item.from]?.talking ?? false),
+              },
+            }));
+          }
+          if (micOnRef.current || playCtx.current) {
+            const audio = await lobbyApi.pullAudio(code, token, afterAudio);
+            for (const frame of audio.frames) {
+              afterAudio = Math.max(afterAudio, frame.id);
+              const binary = Uint8Array.from(atob(frame.pcm), (char) =>
+                char.charCodeAt(0),
+              );
+              playFrame(frame.from, binary);
+            }
           }
         } catch {
-          // связь с лобби моргнула — следующая попытка подберёт сигналы
+          // следующая попытка подберёт звук
         }
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        await new Promise((resolve) => setTimeout(resolve, 120));
       }
     };
     void poll();
     return () => {
       stopped = true;
     };
-  }, [code, onSignal, token]);
-
-  useEffect(() => {
-    if (!micOn) return;
-    const timer = setInterval(() => {
-      for (const remote of othersRef.current) {
-        if (mySeat < remote) void offerTo(remote).catch(() => {});
-      }
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [micOn, mySeat, offerTo]);
-
-  useEffect(() => {
-    const stream = localStream.current;
-    if (!micOn || !stream) return;
-    const context = new AudioContext();
-    const source = context.createMediaStreamSource(stream);
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-    const samples = new Uint8Array(analyser.fftSize);
-    let last = false;
-    let frame = 0;
-    const tick = () => {
-      analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (const value of samples) {
-        const centered = (value - 128) / 128;
-        sum += centered * centered;
-      }
-      const talking = Math.sqrt(sum / samples.length) > 0.04;
-      if (talking !== last) {
-        last = talking;
-        setPresence((prev) => ({
-          ...prev,
-          [mySeat]: { muted: false, talking },
-        }));
-        send({ kind: "talk", talking });
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(frame);
-      void context.close();
-    };
-  }, [micOn, mySeat, send]);
+  }, [code, playFrame, token]);
 
   const toggle = useCallback(async () => {
     setError(null);
     if (micOnRef.current) {
       micOnRef.current = false;
       setMicOn(false);
+      stopCapture();
       setPresence((prev) => ({
         ...prev,
         [mySeat]: { muted: true, talking: false },
       }));
       send({ kind: "mute", muted: true });
       send({ kind: "talk", talking: false });
-      closeAll();
       return;
     }
+    if (othersRef.current.length === 0) return;
     try {
-      iceServers.current = (await lobbyApi.ice(code, token)).iceServers;
+      const ctx = playCtx.current ?? new AudioContext();
+      playCtx.current = ctx;
+      await ctx.resume();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
-      localStream.current = stream;
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const sink = ctx.createGain();
+      sink.gain.value = 0;
+      source.connect(processor);
+      processor.connect(sink);
+      sink.connect(ctx.destination);
+
+      let pending = new Int16Array(0);
+      let speaking = false;
+      processor.onaudioprocess = (event) => {
+        if (!micOnRef.current) return;
+        const input = event.inputBuffer.getChannelData(0);
+        const chunk = downsample(input, ctx.sampleRate, SAMPLE_RATE);
+        const merged = new Int16Array(pending.length + chunk.length);
+        merged.set(pending);
+        merged.set(chunk, pending.length);
+        let offset = 0;
+        while (merged.length - offset >= FRAME) {
+          const frame = merged.subarray(offset, offset + FRAME);
+          offset += FRAME;
+          const copy = new Int16Array(frame);
+          void lobbyApi
+            .postAudio(code, token, copy.buffer.slice(0) as ArrayBuffer)
+            .catch(() => {});
+          let energy = 0;
+          for (const sample of frame) energy += sample * sample;
+          const talking = Math.sqrt(energy / frame.length) / 32768 > 0.04;
+          if (talking !== speaking) {
+            speaking = talking;
+            setPresence((prev) => ({
+              ...prev,
+              [mySeat]: { muted: false, talking },
+            }));
+            send({ kind: "talk", talking });
+          }
+        }
+        pending = merged.subarray(offset);
+      };
+
+      capture.current = {
+        stop: () => {
+          processor.onaudioprocess = null;
+          processor.disconnect();
+          source.disconnect();
+          sink.disconnect();
+          stream.getTracks().forEach((track) => track.stop());
+        },
+      };
       micOnRef.current = true;
       setMicOn(true);
       setPresence((prev) => ({
@@ -280,19 +197,51 @@ export function useTableVoice(
         [mySeat]: { muted: false, talking: false },
       }));
       send({ kind: "mute", muted: false });
-      for (const remote of othersRef.current) {
-        if (mySeat < remote) await offerTo(remote);
-        else makePc(remote);
-      }
     } catch {
-      closeAll();
+      stopCapture();
       micOnRef.current = false;
       setMicOn(false);
       setError("Браузер не дал микрофон. Разрешите его для этого сайта.");
     }
-  }, [closeAll, code, makePc, mySeat, offerTo, send, token]);
+  }, [code, mySeat, send, stopCapture, token]);
 
-  useEffect(() => closeAll, [closeAll]);
+  useEffect(
+    () => () => {
+      stopCapture();
+      void playCtx.current?.close();
+    },
+    [stopCapture],
+  );
 
-  return { micOn, error, presence, remoteStreams, toggle };
+  return { micOn, error, presence, toggle };
+}
+
+function downsample(
+  input: Float32Array,
+  fromRate: number,
+  toRate: number,
+): Int16Array {
+  if (fromRate === toRate) return floatToPcm(input);
+  const ratio = fromRate / toRate;
+  const length = Math.floor(input.length / ratio);
+  const out = new Int16Array(length);
+  for (let i = 0; i < length; i += 1) {
+    const pos = i * ratio;
+    const left = Math.floor(pos);
+    const right = Math.min(left + 1, input.length - 1);
+    const mix = input[left] * (1 - (pos - left)) + input[right] * (pos - left);
+    out[i] = toInt16(mix);
+  }
+  return out;
+}
+
+function floatToPcm(input: Float32Array): Int16Array {
+  const out = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i += 1) out[i] = toInt16(input[i]);
+  return out;
+}
+
+function toInt16(sample: number): number {
+  const clamped = Math.max(-1, Math.min(1, sample));
+  return clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
 }

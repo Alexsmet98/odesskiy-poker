@@ -464,4 +464,16 @@ describe("лобби: голос", () => {
       }),
     ).toThrow(/нет живого/);
   });
+
+  it("передаёт звук микрофона остальным и не возвращает его говорящему", () => {
+    const { manager, code, tokens } = fullLobby();
+    const pcm = Buffer.from([0, 1, 2, 3]);
+    manager.postAudio(code, tokens[0], pcm);
+    const heard = manager.pullAudio(code, tokens[1], 0);
+    expect(heard).toHaveLength(1);
+    expect(heard[0].from).toBe(0);
+    expect(Buffer.from(heard[0].pcm, "base64").equals(pcm)).toBe(true);
+    expect(manager.pullAudio(code, tokens[0], 0)).toHaveLength(0);
+    expect(manager.pullAudio(code, tokens[2], heard[0].id)).toHaveLength(0);
+  });
 });

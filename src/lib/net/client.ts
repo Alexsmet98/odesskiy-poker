@@ -81,4 +81,25 @@ export const lobbyApi = {
       `${lobbyPath(code)}/voice?after=${after}`,
       { token },
     ),
+  postAudio: async (code: string, token: string, pcm: ArrayBuffer) => {
+    const response = await fetch(`${lobbyPath(code)}/voice/audio`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/octet-stream",
+      },
+      body: pcm,
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(body?.error ?? "Сервер не принял звук");
+    }
+  },
+  pullAudio: (code: string, token: string, after: number) =>
+    request<{ frames: { id: number; from: number; pcm: string }[] }>(
+      `${lobbyPath(code)}/voice/audio?after=${after}`,
+      { token },
+    ),
 };
