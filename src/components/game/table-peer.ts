@@ -6,6 +6,11 @@ import {
   tuneOpusDescription,
 } from "@/lib/net/opus";
 import type { VoiceSignal } from "@/lib/net/voice";
+import {
+  summarizeVoiceStats,
+  type VoiceMeasure,
+  type VoiceStatSample,
+} from "@/lib/net/voice-stats";
 
 const TALK_RMS = 0.02;
 const RESEND_MS = 2_500;
@@ -13,7 +18,8 @@ const RESEND_MS = 2_500;
 export type PeerHandlers = {
   send: (signal: VoiceSignal) => void;
   onTalking: (talking: boolean) => void;
-  onDown: (down: boolean) => void;
+  onState: (state: RTCPeerConnectionState) => void;
+  onPlaybackBlocked: (blocked: boolean) => void;
   audioContext: () => AudioContext;
 };
 
@@ -32,7 +38,6 @@ export class TablePeer {
   private ignoreOffer = false;
   private dirty = false;
   private closed = false;
-  private failures = 0;
   private pendingIce: RTCIceCandidateInit[] = [];
   private resend: ReturnType<typeof setTimeout> | null = null;
   private stopLevel: (() => void) | null = null;
@@ -65,11 +70,13 @@ export class TablePeer {
       const [stream] = event.streams;
       const media = stream ?? new MediaStream([event.track]);
       this.audio.srcObject = media;
-      this.resumePlayback();
+      void this.resumePlayback();
       this.watch(media);
     };
     this.pc.onconnectionstatechange = () => {
-      this.onConnection();
+      if (this.closed) return;
+      if (this.pc.connectionState === "connected") void this.capBitrate();
+      this.handlers.onState(this.pc.connectionState);
     };
     this.pc.onsignalingstatechange = () => {
       this.onSignaling();
@@ -105,8 +112,71 @@ export class TablePeer {
     void this.enqueue(() => this.apply(signal));
   }
 
-  resumePlayback(): void {
-    void this.audio.play().catch(() => {});
+  /** Подставляет свежие STUN/TURN и используется до следующего restartIce. */
+  setIceServers(iceServers: RTCIceServer[]): void {
+    if (this.closed) return;
+    try {
+      this.pc.setConfiguration({ iceServers, bundlePolicy: "max-bundle" });
+    } catch {
+      // закрытое соединение уже не принимает настройки
+    }
+  }
+
+  /** Заново ищет путь, не разрывая договорённость о кодеке. */
+  restartIce(): void {
+    if (this.closed) return;
+    try {
+      this.pc.restartIce();
+    } catch {
+      // следующий таймер пересоздаст соединение целиком
+    }
+  }
+
+  isConnected(): boolean {
+    return !this.closed && this.pc.connectionState === "connected";
+  }
+
+  linkState(): RTCPeerConnectionState {
+    return this.closed ? "closed" : this.pc.connectionState;
+  }
+
+  /**
+   * Запускает уже привязанный звук.
+   * Отказ NotAllowedError значит, что браузер ждёт жест — кнопку «Включить звук».
+   */
+  resumePlayback(): Promise<boolean> {
+    const pending = this.audio.play();
+    return pending.then(
+      () => {
+        this.handlers.onPlaybackBlocked(false);
+        return false;
+      },
+      (error: unknown) => {
+        const blocked = errorName(error) === "NotAllowedError";
+        if (blocked) this.handlers.onPlaybackBlocked(true);
+        return blocked;
+      },
+    );
+  }
+
+  async snapshot(): Promise<VoiceMeasure & { state: RTCPeerConnectionState }> {
+    const state = this.linkState();
+    try {
+      const stats = await this.pc.getStats();
+      const samples: VoiceStatSample[] = [];
+      stats.forEach((report) => {
+        samples.push(report as VoiceStatSample);
+      });
+      return { state, ...summarizeVoiceStats(samples) };
+    } catch {
+      return {
+        state,
+        rttMs: null,
+        lossPct: null,
+        jitterMs: null,
+        route: "unknown",
+      };
+    }
   }
 
   close(): void {
@@ -115,7 +185,7 @@ export class TablePeer {
     if (this.resend) clearTimeout(this.resend);
     this.stopLevel?.();
     this.handlers.onTalking(false);
-    this.handlers.onDown(false);
+    this.handlers.onPlaybackBlocked(false);
     this.pc.onnegotiationneeded = null;
     this.pc.onicecandidate = null;
     this.pc.ontrack = null;
@@ -225,28 +295,6 @@ export class TablePeer {
     }, RESEND_MS);
   }
 
-  private onConnection(): void {
-    if (this.closed) return;
-    const state = this.pc.connectionState;
-    if (state === "connected") {
-      this.failures = 0;
-      this.handlers.onDown(false);
-      void this.capBitrate();
-      return;
-    }
-    if (state !== "failed") return;
-    this.failures += 1;
-    if (this.failures <= 2) {
-      try {
-        this.pc.restartIce();
-      } catch {
-        this.handlers.onDown(true);
-      }
-      return;
-    }
-    this.handlers.onDown(true);
-  }
-
   private async capBitrate(): Promise<void> {
     if (!this.sender?.track) return;
     try {
@@ -266,6 +314,18 @@ export class TablePeer {
       if (!this.closed) this.handlers.onTalking(talking);
     });
   }
+}
+
+function errorName(error: unknown): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    typeof error.name === "string"
+  ) {
+    return error.name;
+  }
+  return "";
 }
 
 /** Предпочитает Opus, оставляя остальные кодеки запасными. */
