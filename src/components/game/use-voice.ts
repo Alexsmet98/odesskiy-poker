@@ -8,9 +8,11 @@ import {
   DISCONNECT_GRACE_MS,
   afterFailure,
   afterGrace,
+  afterStall,
   describeMicError,
   freshRecovery,
   iceRetryDelay,
+  stallDelay,
   type Recovery,
   type RecoveryStep,
 } from "@/lib/net/voice-recovery";
@@ -192,6 +194,7 @@ export function useTableVoice(
       });
       peers.set(seat, peer);
       if (trackRef.current) void peer.setMic(trackRef.current);
+      armStall(seat);
       return peer;
     };
 
@@ -219,15 +222,18 @@ export function useTableVoice(
         if (!peer || peer.isConnected()) return;
         applying = true;
         try {
-          if (step.kind === "recreate") replacePeer(seat);
-          else peer.restartIce();
+          if (step.kind === "recreate" || step.kind === "recreate-now") {
+            replacePeer(seat);
+            return;
+          }
+          peer.restartIce();
         } finally {
           applying = false;
         }
         if (peers.get(seat)?.isConnected() || bagFor(seat).retry) return;
         armWatch(seat);
       };
-      if (step.kind === "restart-now") {
+      if (step.kind === "restart-now" || step.kind === "recreate-now") {
         run();
         return;
       }
@@ -247,7 +253,11 @@ export function useTableVoice(
         const peer = peers.get(seat);
         const state = peer?.linkState();
         if (!peer || state === "connected" || state === "closed") return;
-        if ((state === "connecting" || state === "new") && bag.spins < CONNECTING_SPINS) {
+        if (state === "new") {
+          applyStep(seat, afterStall(recoveryOf(seat)));
+          return;
+        }
+        if (state === "connecting" && bag.spins < CONNECTING_SPINS) {
           bag.spins += 1;
           armWatch(seat);
           return;
@@ -255,6 +265,31 @@ export function useTableVoice(
         bag.spins = 0;
         applyStep(seat, afterFailure(recoveryOf(seat)));
       }, DISCONNECT_GRACE_MS);
+    };
+
+    /** Пока канал остаётся new, ждёт 2, 5 и 10 секунд и затем просит кнопку. */
+    const armStall = (seat: PlayerId) => {
+      const recovery = recoveryOf(seat);
+      if (recovery.gaveUp) return;
+      const delay = stallDelay(recovery);
+      if (delay === null) {
+        applyStep(seat, afterStall(recovery));
+        return;
+      }
+      const bag = bagFor(seat);
+      if (bag.retry || bag.grace || bag.watch) return;
+      bag.watch = setTimeout(() => {
+        bag.watch = undefined;
+        if (stopped || !peers.has(seat)) return;
+        const state = peers.get(seat)?.linkState();
+        if (state === "connected" || state === "closed") return;
+        if (state === "connecting") {
+          armWatch(seat);
+          return;
+        }
+        if (state === "disconnected" || state === "failed") return;
+        applyStep(seat, afterStall(recoveryOf(seat)));
+      }, delay);
     };
 
     const onState = (seat: PlayerId, state: RTCPeerConnectionState) => {
@@ -270,12 +305,18 @@ export function useTableVoice(
       if (recovery.gaveUp) return;
       const bag = bagFor(seat);
       if (state === "disconnected") {
-        if (bag.grace || bag.retry || bag.watch) return;
+        if (bag.grace || bag.retry) return;
+        if (bag.watch) {
+          clearTimeout(bag.watch);
+          bag.watch = undefined;
+        }
         bag.grace = setTimeout(() => {
           bag.grace = undefined;
           if (!peers.has(seat)) return;
           const current = peers.get(seat)?.linkState();
-          if (current === "connected" || current === "connecting" || current === "new") {
+          if (current === "connected" || current === "connecting") return;
+          if (current === "new") {
+            applyStep(seat, afterStall(recoveryOf(seat)));
             return;
           }
           applyStep(seat, afterGrace(recoveryOf(seat)));

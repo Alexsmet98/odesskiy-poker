@@ -16,6 +16,7 @@ export type RecoveryStep =
   | { kind: "restart-now"; recovery: Recovery }
   | { kind: "restart"; recovery: Recovery; delayMs: number }
   | { kind: "recreate"; recovery: Recovery; delayMs: number }
+  | { kind: "recreate-now"; recovery: Recovery }
   | { kind: "give-up"; recovery: Recovery };
 
 export function freshRecovery(): Recovery {
@@ -45,6 +46,26 @@ export function afterFailure(recovery: Recovery): RecoveryStep {
   if (recovery.gaveUp) return { kind: "give-up", recovery };
   if (!recovery.restartTried) return takeDelay(recovery, "restart");
   return takeDelay(recovery, "recreate");
+}
+
+/**
+ * Ответ на приглашение не пришёл, connectionState так и остался new.
+ * restartIce здесь бесполезен: без ответа канал не сдвигается.
+ * Две первые паузы собирают соединение заново, третья показывает кнопку.
+ */
+export function afterStall(recovery: Recovery): RecoveryStep {
+  if (recovery.gaveUp || recovery.used >= RETRY_DELAYS_MS.length - 1) {
+    return { kind: "give-up", recovery: { ...recovery, gaveUp: true } };
+  }
+  const step = takeDelay(recovery, "recreate");
+  if (step.kind !== "recreate") return step;
+  return { kind: "recreate-now", recovery: step.recovery };
+}
+
+/** Сколько ждать ответ, пока соединение ещё new. null — попытки кончились. */
+export function stallDelay(recovery: Recovery): number | null {
+  if (recovery.gaveUp || recovery.used >= RETRY_DELAYS_MS.length) return null;
+  return RETRY_DELAYS_MS[recovery.used];
 }
 
 /** Пауза перед повтором запроса TURN. После 10 с интервал больше не растёт. */

@@ -4,9 +4,11 @@ import {
   RETRY_DELAYS_MS,
   afterFailure,
   afterGrace,
+  afterStall,
   describeMicError,
   freshRecovery,
   iceRetryDelay,
+  stallDelay,
 } from "./voice-recovery";
 
 describe("восстановление голоса", () => {
@@ -44,6 +46,21 @@ describe("восстановление голоса", () => {
     step = afterFailure(step.recovery);
     expect(step.kind).toBe("give-up");
     expect(afterFailure(step.recovery).kind).toBe("give-up");
+  });
+
+  it("без ответа на приглашение собирает канал заново через 2 и 5 секунд, на 10 показывает кнопку", () => {
+    let recovery = freshRecovery();
+    expect(stallDelay(recovery)).toBe(2_000);
+    let step = afterStall(recovery);
+    expect(step.kind).toBe("recreate-now");
+    recovery = step.recovery;
+    expect(stallDelay(recovery)).toBe(5_000);
+    step = afterStall(recovery);
+    expect(step.kind).toBe("recreate-now");
+    recovery = step.recovery;
+    expect(stallDelay(recovery)).toBe(10_000);
+    expect(afterStall(recovery).kind).toBe("give-up");
+    expect(stallDelay(afterStall(recovery).recovery)).toBeNull();
   });
 
   it("повтор загрузки TURN растёт до 10 секунд и дальше не частит", () => {

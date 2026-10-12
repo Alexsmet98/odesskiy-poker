@@ -281,17 +281,23 @@ export class TablePeer {
 
   private onSignaling(): void {
     if (this.resend) clearTimeout(this.resend);
+    this.resend = null;
     if (this.closed) return;
     if (this.pc.signalingState === "stable" && this.dirty) {
       void this.enqueue(() => this.offer());
     }
-    if (this.pc.signalingState !== "have-local-offer") return;
+    this.scheduleResend();
+  }
+
+  /** Пока ответ не пришёл, приглашение уходит снова каждые 2,5 с, а не один раз. */
+  private scheduleResend(): void {
+    if (this.closed || this.pc.signalingState !== "have-local-offer") return;
     this.resend = setTimeout(() => {
+      this.resend = null;
       const sdp = this.pc.localDescription?.sdp;
-      if (this.closed || this.pc.signalingState !== "have-local-offer" || !sdp) {
-        return;
-      }
+      if (this.closed || this.pc.signalingState !== "have-local-offer" || !sdp) return;
       this.handlers.send({ kind: "offer", to: this.remote, sdp });
+      this.scheduleResend();
     }, RESEND_MS);
   }
 
