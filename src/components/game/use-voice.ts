@@ -38,6 +38,7 @@ type TimerBag = {
   grace?: ReturnType<typeof setTimeout>;
   retry?: ReturnType<typeof setTimeout>;
   watch?: ReturnType<typeof setTimeout>;
+  stall?: ReturnType<typeof setTimeout>;
   spins: number;
 };
 
@@ -147,9 +148,11 @@ export function useTableVoice(
       if (bag.grace) clearTimeout(bag.grace);
       if (bag.retry) clearTimeout(bag.retry);
       if (bag.watch) clearTimeout(bag.watch);
+      if (bag.stall) clearTimeout(bag.stall);
       bag.grace = undefined;
       bag.retry = undefined;
       bag.watch = undefined;
+      bag.stall = undefined;
       bag.spins = 0;
     };
 
@@ -195,6 +198,7 @@ export function useTableVoice(
       peers.set(seat, peer);
       if (trackRef.current) void peer.setMic(trackRef.current);
       armStall(seat);
+      armWatch(seat);
       return peer;
     };
 
@@ -210,8 +214,12 @@ export function useTableVoice(
       const bag = bagFor(seat);
       if (bag.grace) clearTimeout(bag.grace);
       if (bag.retry) clearTimeout(bag.retry);
+      if (bag.watch) clearTimeout(bag.watch);
+      if (bag.stall) clearTimeout(bag.stall);
       bag.grace = undefined;
       bag.retry = undefined;
+      bag.watch = undefined;
+      bag.stall = undefined;
       if (step.kind === "give-up") {
         reportDown(seat, true);
         return;
@@ -245,14 +253,23 @@ export function useTableVoice(
 
     const armWatch = (seat: PlayerId) => {
       const bag = bagFor(seat);
-      if (bag.retry) return;
+      if (recoveryOf(seat).gaveUp || bag.retry) return;
       if (bag.watch) clearTimeout(bag.watch);
-      bag.watch = setTimeout(() => {
+      const timer = setTimeout(() => {
+        if (bag.watch !== timer) return;
         bag.watch = undefined;
         if (stopped || bag.retry) return;
         const peer = peers.get(seat);
         const state = peer?.linkState();
         if (!peer || state === "connected" || state === "closed") return;
+        if (state === "new" && bag.stall) {
+          armWatch(seat);
+          return;
+        }
+        if (bag.stall) {
+          clearTimeout(bag.stall);
+          bag.stall = undefined;
+        }
         if (state === "new") {
           applyStep(seat, afterStall(recoveryOf(seat)));
           return;
@@ -265,6 +282,7 @@ export function useTableVoice(
         bag.spins = 0;
         applyStep(seat, afterFailure(recoveryOf(seat)));
       }, DISCONNECT_GRACE_MS);
+      bag.watch = timer;
     };
 
     /** Пока канал остаётся new, ждёт 2, 5 и 10 секунд и затем просит кнопку. */
@@ -277,19 +295,21 @@ export function useTableVoice(
         return;
       }
       const bag = bagFor(seat);
-      if (bag.retry || bag.grace || bag.watch) return;
-      bag.watch = setTimeout(() => {
-        bag.watch = undefined;
+      if (bag.retry || bag.grace || bag.stall) return;
+      const timer = setTimeout(() => {
+        if (bag.stall !== timer) return;
+        bag.stall = undefined;
         if (stopped || !peers.has(seat)) return;
         const state = peers.get(seat)?.linkState();
-        if (state === "connected" || state === "closed") return;
-        if (state === "connecting") {
-          armWatch(seat);
-          return;
-        }
+        if (state === "connected" || state === "closed" || state === "connecting") return;
         if (state === "disconnected" || state === "failed") return;
+        if (bag.watch) {
+          clearTimeout(bag.watch);
+          bag.watch = undefined;
+        }
         applyStep(seat, afterStall(recoveryOf(seat)));
       }, delay);
+      bag.stall = timer;
     };
 
     const onState = (seat: PlayerId, state: RTCPeerConnectionState) => {
@@ -310,6 +330,10 @@ export function useTableVoice(
           clearTimeout(bag.watch);
           bag.watch = undefined;
         }
+        if (bag.stall) {
+          clearTimeout(bag.stall);
+          bag.stall = undefined;
+        }
         bag.grace = setTimeout(() => {
           bag.grace = undefined;
           if (!peers.has(seat)) return;
@@ -328,6 +352,8 @@ export function useTableVoice(
       bag.grace = undefined;
       if (bag.watch) clearTimeout(bag.watch);
       bag.watch = undefined;
+      if (bag.stall) clearTimeout(bag.stall);
+      bag.stall = undefined;
       if (bag.retry) return;
       applyStep(seat, afterFailure(recoveryOf(seat)));
     };
