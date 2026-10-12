@@ -37,6 +37,8 @@ export const POLL_LEASE_MS = 10_000;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const MAX_LOBBIES = 200;
 const IDLE_LOBBY_MS = 6 * 60 * 60 * 1000;
+/** ICE-кандидатов у одной пары бывает несколько десятков, короткая очередь их теряет. */
+const VOICE_INBOX_LIMIT = 200;
 
 export class LobbyError extends Error {
   constructor(
@@ -78,17 +80,8 @@ type Lobby = {
   /** Очередь сигналов голоса для каждого места. */
   voiceInbox: VoiceItem[][];
   voiceSeq: number;
-  /** Куски звука (PCM) для каждого места. */
-  audioInbox: AudioFrame[][];
-  audioSeq: number;
   /** Результат этой партии уже записан в журнал турнира. */
   journalRecorded: boolean;
-};
-
-type AudioFrame = {
-  id: number;
-  from: PlayerId;
-  pcm: Buffer;
 };
 
 type VoiceItem = {
@@ -180,8 +173,6 @@ export class LobbyManager {
       touchedAt: this.now(),
       voiceInbox: PLAYER_IDS.map(() => []),
       voiceSeq: 0,
-      audioInbox: PLAYER_IDS.map(() => []),
-      audioSeq: 0,
       journalRecorded: false,
     };
     this.lobbies.set(code, lobby);
@@ -503,7 +494,9 @@ export class LobbyManager {
     for (const seat of targets) {
       const inbox = lobby.voiceInbox[seat];
       inbox.push(item);
-      if (inbox.length > 40) inbox.splice(0, inbox.length - 40);
+      if (inbox.length > VOICE_INBOX_LIMIT) {
+        inbox.splice(0, inbox.length - VOICE_INBOX_LIMIT);
+      }
     }
     this.touch(lobby);
   }
@@ -516,50 +509,6 @@ export class LobbyManager {
       throw new LobbyError("Не указано, с какого сигнала читать", 400);
     }
     return lobby.voiceInbox[seat].filter((item) => item.id > after);
-  }
-
-  /**
-   * Кладёт кусок микрофона остальным живым игрокам.
-   * Звук идёт через этот сервер, а не напрямую между браузерами.
-   */
-  postAudio(rawCode: string, token: string, pcm: Buffer): void {
-    const lobby = this.requireLobby(rawCode);
-    const from = this.requireSeat(lobby, token);
-    if (lobby.seats[from].kind !== "human") {
-      throw new LobbyError("Говорить может только живой игрок", 403);
-    }
-    if (pcm.length === 0 || pcm.length > 32_000 || pcm.length % 2 !== 0) {
-      throw new LobbyError("Непонятный кусок звука", 400);
-    }
-    lobby.audioSeq += 1;
-    const frame: AudioFrame = { id: lobby.audioSeq, from, pcm };
-    for (const seat of PLAYER_IDS) {
-      if (seat === from || lobby.seats[seat].kind !== "human") continue;
-      const inbox = lobby.audioInbox[seat];
-      inbox.push(frame);
-      if (inbox.length > 40) inbox.splice(0, inbox.length - 40);
-    }
-    this.touch(lobby);
-  }
-
-  /** Куски звука с номером больше `after`. */
-  pullAudio(
-    rawCode: string,
-    token: string,
-    after: number,
-  ): { id: number; from: PlayerId; pcm: string }[] {
-    const lobby = this.requireLobby(rawCode);
-    const seat = this.requireSeat(lobby, token);
-    if (!Number.isFinite(after) || after < 0) {
-      throw new LobbyError("Не указано, с какого звука читать", 400);
-    }
-    return lobby.audioInbox[seat]
-      .filter((frame) => frame.id > after)
-      .map((frame) => ({
-        id: frame.id,
-        from: frame.from,
-        pcm: frame.pcm.toString("base64"),
-      }));
   }
 
   /** Состояние для тестов и отладки: что видит конкретный игрок. */

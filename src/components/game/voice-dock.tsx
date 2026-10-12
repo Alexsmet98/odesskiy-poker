@@ -43,9 +43,9 @@ export function VoiceSession({
       <div className="pointer-events-none fixed bottom-3 right-3 z-30 flex flex-col items-end gap-2">
         {others.length > 0 && (
           <div className="pointer-events-auto flex flex-col items-end gap-1">
-            {voice.error && (
-              <p className="max-w-56 rounded-md border border-destructive/50 bg-black/80 px-2 py-1 text-[11px] text-red-300">
-                {voice.error}
+            {(voice.error || voice.channelError) && (
+              <p className="max-w-64 rounded-md border border-destructive/50 bg-black/80 px-2 py-1 text-[11px] text-red-300">
+                {voice.error ?? voice.channelError}
               </p>
             )}
             <Button

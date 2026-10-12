@@ -491,16 +491,19 @@ describe("лобби: голос", () => {
     ).toThrow(/нет живого/);
   });
 
-  it("передаёт звук микрофона остальным и не возвращает его говорящему", () => {
+  it("хранит длинную пачку ICE-кандидатов для одного собеседника", () => {
     const { manager, code, tokens } = fullLobby();
-    const pcm = Buffer.from([0, 1, 2, 3]);
-    manager.postAudio(code, tokens[0], pcm);
-    const heard = manager.pullAudio(code, tokens[1], 0);
-    expect(heard).toHaveLength(1);
-    expect(heard[0].from).toBe(0);
-    expect(Buffer.from(heard[0].pcm, "base64").equals(pcm)).toBe(true);
-    expect(manager.pullAudio(code, tokens[0], 0)).toHaveLength(0);
-    expect(manager.pullAudio(code, tokens[2], heard[0].id)).toHaveLength(0);
+    for (let i = 0; i < 50; i += 1) {
+      manager.postVoice(code, tokens[0], {
+        kind: "ice",
+        to: 1,
+        candidate: { candidate: `candidate:${i}`, sdpMid: "0", sdpMLineIndex: 0 },
+      });
+    }
+    const heard = manager.pullVoice(code, tokens[1], 0);
+    expect(heard).toHaveLength(50);
+    expect(heard[0].signal).toMatchObject({ kind: "ice" });
+    expect(manager.pullVoice(code, tokens[0], 0)).toHaveLength(0);
   });
 });
 

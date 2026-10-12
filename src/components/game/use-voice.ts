@@ -4,19 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayerId } from "@/lib/game/types";
 import { lobbyApi } from "@/lib/net/client";
 import type { VoiceSignal } from "@/lib/net/voice";
+import { TablePeer, watchTalking } from "./table-peer";
 
 export type VoicePresence = {
   muted: boolean;
   talking: boolean;
 };
 
-const SAMPLE_RATE = 16_000;
-/** Сколько сэмплов копить перед отправкой: 100 мс. */
-const FRAME = 1600;
+const POLL_MS = 120;
+const STUN: RTCIceServer = { urls: "stun:stun.l.google.com:19302" };
+const CHANNEL_ERROR =
+  "Прямой звук не дошёл. Без TURN на сервере из разных сетей друг друга не слышно.";
 
 /**
- * Голос за столом идёт через сервер лобби, а не напрямую между браузерами.
- * Индикатор «говорит» и сам звук поэтому доходят одним и тем же путём.
+ * Голос за столом идёт WebRTC напрямую между браузерами, кодеком Opus.
+ * Сервер только передаёт приглашение. Кольцо «говорит» загорается,
+ * когда звук этого игрока реально пришёл.
  */
 export function useTableVoice(
   code: string,
@@ -26,18 +29,30 @@ export function useTableVoice(
 ) {
   const [micOn, setMicOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [channelError, setChannelError] = useState<string | null>(null);
   const [presence, setPresence] = useState<
     Partial<Record<PlayerId, VoicePresence>>
   >({});
 
   const micOnRef = useRef(false);
   const othersRef = useRef(others);
+  const peersRef = useRef<Map<PlayerId, TablePeer>>(new Map());
+  const trackRef = useRef<MediaStreamTrack | null>(null);
+  const stopLevel = useRef<(() => void) | null>(null);
+  const audioContext = useRef<AudioContext | null>(null);
+  const downSeats = useRef(new Set<PlayerId>());
+
   useEffect(() => {
     othersRef.current = others;
   }, [others]);
-  const playCtx = useRef<AudioContext | null>(null);
-  const capture = useRef<{ stop: () => void } | null>(null);
-  const playAt = useRef(new Map<number, number>());
+
+  const context = useCallback(() => {
+    if (!audioContext.current || audioContext.current.state === "closed") {
+      audioContext.current = new AudioContext();
+    }
+    void audioContext.current.resume();
+    return audioContext.current;
+  }, []);
 
   const send = useCallback(
     (signal: VoiceSignal) => {
@@ -46,150 +61,172 @@ export function useTableVoice(
     [code, token],
   );
 
-  const stopCapture = useCallback(() => {
-    capture.current?.stop();
-    capture.current = null;
-  }, []);
-
-  const playFrame = useCallback((from: number, bytes: Uint8Array) => {
-    const ctx = playCtx.current;
-    if (!ctx || bytes.length < 2) return;
-    const samples = new Int16Array(
-      bytes.buffer,
-      bytes.byteOffset,
-      Math.floor(bytes.byteLength / 2),
-    );
-    const buffer = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
-    const channel = buffer.getChannelData(0);
-    for (let i = 0; i < samples.length; i += 1) channel[i] = samples[i] / 32768;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    const now = ctx.currentTime;
-    let when = playAt.current.get(from) ?? 0;
-    if (when < now + 0.02 || when > now + 0.45) when = now + 0.08;
-    source.start(when);
-    playAt.current.set(from, when + buffer.duration);
+  const stopMic = useCallback(() => {
+    stopLevel.current?.();
+    stopLevel.current = null;
+    const track = trackRef.current;
+    trackRef.current = null;
+    track?.stop();
+    for (const peer of peersRef.current.values()) void peer.setMic(null);
   }, []);
 
   useEffect(() => {
     let stopped = false;
-    let afterSignal = 0;
-    let afterAudio = 0;
+    const peers = new Map<PlayerId, TablePeer>();
+    peersRef.current = peers;
+    downSeats.current = new Set();
+    let after = 0;
+    let iceServers: RTCIceServer[] = [STUN];
+
+    const reportDown = (seat: PlayerId, down: boolean) => {
+      if (down) downSeats.current.add(seat);
+      else downSeats.current.delete(seat);
+      setChannelError(downSeats.current.size > 0 ? CHANNEL_ERROR : null);
+    };
+
+    const forgetSeat = (seat: PlayerId) => {
+      setPresence((prev) => {
+        if (!prev[seat]) return prev;
+        const next = { ...prev };
+        delete next[seat];
+        return next;
+      });
+    };
+
+    const ensure = (seat: PlayerId) => {
+      if (seat === mySeat || peers.has(seat)) return;
+      const peer = new TablePeer(seat, mySeat, iceServers, {
+        send,
+        audioContext: context,
+        onTalking: (talking) => {
+          setPresence((prev) => ({
+            ...prev,
+            [seat]: { muted: prev[seat]?.muted ?? false, talking },
+          }));
+        },
+        onDown: (down) => reportDown(seat, down),
+      });
+      peers.set(seat, peer);
+      if (trackRef.current) void peer.setMic(trackRef.current);
+    };
+
+    const syncPeers = () => {
+      const wanted = new Set(othersRef.current);
+      for (const seat of [...peers.keys()]) {
+        if (wanted.has(seat)) continue;
+        peers.get(seat)?.close();
+        peers.delete(seat);
+        reportDown(seat, false);
+        forgetSeat(seat);
+      }
+      for (const seat of wanted) ensure(seat);
+    };
+
+    const onSignal = (from: PlayerId, signal: VoiceSignal) => {
+      if (signal.kind === "talk") return;
+      if (signal.kind === "mute") {
+        setPresence((prev) => ({
+          ...prev,
+          [from]: {
+            muted: signal.muted,
+            talking: signal.muted ? false : (prev[from]?.talking ?? false),
+          },
+        }));
+        return;
+      }
+      if (signal.to !== mySeat) return;
+      ensure(from);
+      peers.get(from)?.accept(signal);
+    };
+
     const poll = async () => {
+      try {
+        const ice = await lobbyApi.ice(code, token);
+        if (!stopped && ice.iceServers.length > 0) iceServers = ice.iceServers;
+      } catch {
+        // без ответа сервера остаётся публичный STUN
+      }
+      if (stopped) return;
+      try {
+        const backlog = await lobbyApi.pullVoice(code, token, 0);
+        if (stopped) return;
+        for (const item of backlog.signals) {
+          after = Math.max(after, item.id);
+          if (item.signal.kind === "mute") onSignal(item.from, item.signal);
+        }
+      } catch {
+        // первый живой опрос начнётся ниже
+      }
+      if (stopped) return;
+      syncPeers();
       while (!stopped) {
         try {
-          const signals = await lobbyApi.pullVoice(code, token, afterSignal);
-          for (const item of signals.signals) {
-            afterSignal = Math.max(afterSignal, item.id);
-            if (item.signal.kind !== "mute" && item.signal.kind !== "talk") continue;
-            setPresence((prev) => ({
-              ...prev,
-              [item.from]: {
-                muted:
-                  item.signal.kind === "mute"
-                    ? item.signal.muted
-                    : (prev[item.from]?.muted ?? true),
-                talking:
-                  item.signal.kind === "talk"
-                    ? item.signal.talking
-                    : (prev[item.from]?.talking ?? false),
-              },
-            }));
+          const batch = await lobbyApi.pullVoice(code, token, after);
+          if (stopped) return;
+          for (const item of batch.signals) {
+            after = Math.max(after, item.id);
+            onSignal(item.from, item.signal);
           }
-          if (micOnRef.current || playCtx.current) {
-            const audio = await lobbyApi.pullAudio(code, token, afterAudio);
-            for (const frame of audio.frames) {
-              afterAudio = Math.max(afterAudio, frame.id);
-              const binary = Uint8Array.from(atob(frame.pcm), (char) =>
-                char.charCodeAt(0),
-              );
-              playFrame(frame.from, binary);
-            }
-          }
+          syncPeers();
         } catch {
-          // следующая попытка подберёт звук
+          // следующая попытка подберёт приглашение
         }
-        await new Promise((resolve) => setTimeout(resolve, 120));
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
       }
     };
     void poll();
+
+    const resume = () => {
+      void audioContext.current?.resume();
+      for (const peer of peers.values()) peer.resumePlayback();
+    };
+    window.addEventListener("pointerdown", resume);
+
     return () => {
       stopped = true;
+      window.removeEventListener("pointerdown", resume);
+      for (const peer of peers.values()) peer.close();
+      peers.clear();
+      if (peersRef.current === peers) peersRef.current = new Map();
     };
-  }, [code, playFrame, token]);
+  }, [code, context, mySeat, send, token]);
 
   const toggle = useCallback(async () => {
     setError(null);
     if (micOnRef.current) {
       micOnRef.current = false;
       setMicOn(false);
-      stopCapture();
+      stopMic();
       setPresence((prev) => ({
         ...prev,
         [mySeat]: { muted: true, talking: false },
       }));
       send({ kind: "mute", muted: true });
-      send({ kind: "talk", talking: false });
       return;
     }
     if (othersRef.current.length === 0) return;
     try {
-      const ctx = playCtx.current ?? new AudioContext();
-      playCtx.current = ctx;
-      await ctx.resume();
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-      const source = ctx.createMediaStreamSource(stream);
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      const sink = ctx.createGain();
-      sink.gain.value = 0;
-      source.connect(processor);
-      processor.connect(sink);
-      sink.connect(ctx.destination);
-
-      let pending = new Int16Array(0);
-      let speaking = false;
-      processor.onaudioprocess = (event) => {
-        if (!micOnRef.current) return;
-        const input = event.inputBuffer.getChannelData(0);
-        const chunk = downsample(input, ctx.sampleRate, SAMPLE_RATE);
-        const merged = new Int16Array(pending.length + chunk.length);
-        merged.set(pending);
-        merged.set(chunk, pending.length);
-        let offset = 0;
-        while (merged.length - offset >= FRAME) {
-          const frame = merged.subarray(offset, offset + FRAME);
-          offset += FRAME;
-          const copy = new Int16Array(frame);
-          void lobbyApi
-            .postAudio(code, token, copy.buffer.slice(0) as ArrayBuffer)
-            .catch(() => {});
-          let energy = 0;
-          for (const sample of frame) energy += sample * sample;
-          const talking = Math.sqrt(energy / frame.length) / 32768 > 0.04;
-          if (talking !== speaking) {
-            speaking = talking;
-            setPresence((prev) => ({
-              ...prev,
-              [mySeat]: { muted: false, talking },
-            }));
-            send({ kind: "talk", talking });
-          }
-        }
-        pending = merged.subarray(offset);
-      };
-
-      capture.current = {
-        stop: () => {
-          processor.onaudioprocess = null;
-          processor.disconnect();
-          source.disconnect();
-          sink.disconnect();
-          stream.getTracks().forEach((track) => track.stop());
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
         },
-      };
+      });
+      const track = stream.getAudioTracks()[0];
+      if (!track) throw new Error("Нет дорожки микрофона");
+      trackRef.current = track;
+      stopLevel.current = watchTalking(stream, context, (talking) => {
+        if (!micOnRef.current) return;
+        setPresence((prev) => ({
+          ...prev,
+          [mySeat]: { muted: false, talking },
+        }));
+      });
+      await Promise.all(
+        [...peersRef.current.values()].map((peer) => peer.setMic(track)),
+      );
       micOnRef.current = true;
       setMicOn(true);
       setPresence((prev) => ({
@@ -197,51 +234,22 @@ export function useTableVoice(
         [mySeat]: { muted: false, talking: false },
       }));
       send({ kind: "mute", muted: false });
+      for (const peer of peersRef.current.values()) peer.resumePlayback();
     } catch {
-      stopCapture();
+      stopMic();
       micOnRef.current = false;
       setMicOn(false);
       setError("Браузер не дал микрофон. Разрешите его для этого сайта.");
     }
-  }, [code, mySeat, send, stopCapture, token]);
+  }, [context, mySeat, send, stopMic]);
 
   useEffect(
     () => () => {
-      stopCapture();
-      void playCtx.current?.close();
+      stopMic();
+      void audioContext.current?.close();
     },
-    [stopCapture],
+    [stopMic],
   );
 
-  return { micOn, error, presence, toggle };
-}
-
-function downsample(
-  input: Float32Array,
-  fromRate: number,
-  toRate: number,
-): Int16Array {
-  if (fromRate === toRate) return floatToPcm(input);
-  const ratio = fromRate / toRate;
-  const length = Math.floor(input.length / ratio);
-  const out = new Int16Array(length);
-  for (let i = 0; i < length; i += 1) {
-    const pos = i * ratio;
-    const left = Math.floor(pos);
-    const right = Math.min(left + 1, input.length - 1);
-    const mix = input[left] * (1 - (pos - left)) + input[right] * (pos - left);
-    out[i] = toInt16(mix);
-  }
-  return out;
-}
-
-function floatToPcm(input: Float32Array): Int16Array {
-  const out = new Int16Array(input.length);
-  for (let i = 0; i < input.length; i += 1) out[i] = toInt16(input[i]);
-  return out;
-}
-
-function toInt16(sample: number): number {
-  const clamped = Math.max(-1, Math.min(1, sample));
-  return clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+  return { micOn, error, channelError, presence, toggle };
 }
